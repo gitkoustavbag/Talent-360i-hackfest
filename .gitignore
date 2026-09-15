@@ -1,0 +1,4 @@
+.env
+skills.db
+__pycache__/
+.venv/

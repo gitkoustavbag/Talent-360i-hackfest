@@ -1,0 +1,7 @@
+streamlit
+openai
+python-dotenv
+pandas
+openpyxl
+dataclasses-json
+plotly
