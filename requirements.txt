@@ -5,3 +5,5 @@ pandas
 openpyxl
 dataclasses-json
 plotly
+azure-ai-inference
+azure-core
