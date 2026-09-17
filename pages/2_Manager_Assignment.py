@@ -3,7 +3,7 @@ import streamlit as st
 from db import append_output_row, load_input_sheet, load_optional_output_sheet
 from datetime import datetime
 from theme import apply_theme, audience_banner
-from workflow import effective_question_bank
+from workflow import effective_question_bank, get_approved_questions_for_assignment
 
 apply_theme("manager")
 
@@ -41,27 +41,30 @@ else:
                 matching_blueprints["blueprint_id"] == value, "assessment_name"
             ].iloc[0],
         )
-        blueprint = matching_blueprints[matching_blueprints["blueprint_id"] == blueprint_id].iloc[0]
         matching_schedules = schedules[schedules["blueprint_id"] == blueprint_id]
-        skill_approved = question_bank[
-            (question_bank["blueprint_id"] == blueprint_id) &
-            (question_bank["skill_id"] == row["skill_id"]) &
-            (question_bank["sme_review_status"] == "Approved") &
-            (question_bank["approved_for_schedule"] == "Yes")
-        ]
+        skill_approved = get_approved_questions_for_assignment(
+            question_bank,
+            blueprint_id,
+            row["role_id"],
+            row.get("skill_id"),
+        )
         approved = skill_approved
         if len(approved) < 5:
-            approved = question_bank[
-                (question_bank["blueprint_id"] == blueprint_id) &
-                (question_bank["sme_review_status"] == "Approved") &
-                (question_bank["approved_for_schedule"] == "Yes")
-            ]
-        target_count = min(5, len(approved))
+            approved = get_approved_questions_for_assignment(
+                question_bank,
+                blueprint_id,
+                row["role_id"],
+                None,
+            )
 
+        target_count = 5
         if matching_schedules.empty:
             st.warning("No schedule exists for this blueprint.")
-        elif target_count < 5:
-            st.warning(f"Only {len(approved)} approved questions are available. Approve at least 5 questions first.")
+        elif len(approved) < target_count:
+            st.warning(
+                f"Only {len(approved)} approved questions are available for this blueprint. "
+                "Approve at least 5 questions before assignment."
+            )
         else:
             ready_schedules = matching_schedules[
                 matching_schedules["schedule_status"] == "Ready to Schedule"
