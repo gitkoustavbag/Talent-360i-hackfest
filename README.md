@@ -1,74 +1,192 @@
 # Talent 360
 
-Talent 360 is a Streamlit prototype for governed, AI-assisted employee skill assessment. The active application uses Excel workbooks as its persistence layer and combines seeded reference data with application-created assessment records.
+<p align="center">
+  <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Streamlit" />
+  <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/OpenAI-GPT--4-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI GPT-4" />
+  <img src="https://img.shields.io/badge/Excel-217346?style=for-the-badge&logo=microsoftexcel&logoColor=white" alt="Excel" />
+</p>
 
-The canonical source is the repository root (`app.py`, `pages/`, and the shared Python modules). The nested `11. talent 360/` directory, SQLite-oriented modules, and older seed/validation paths are legacy material unless explicitly migrated.
+Talent 360 is a governed, AI-assisted employee capability assessment workflow built in Streamlit. It transforms employee requests into structured assessments, manager review cycles, skills calibration, and actionable training recommendations using workbooks as the operational data layer.
+
+The canonical source is the project root: `app.py`, `pages/`, and the shared Python modules. The older SQLite-oriented modules and legacy seed/validation files are not the active workflow contract unless explicitly migrated.
+
+## Overview
+
+```mermaid
+flowchart LR
+    A[Employee Request] --> B[Manager Assignment]
+    B --> C[Reviewer Approval]
+    C --> D[Employee Assessment]
+    D --> E[Manager Review]
+    E --> F[Dashboard + Skill Gap Insights]
+    G[Admin Question Bank] --> C
+    H[AI Question Generation] --> G
+```
+
+### Core capabilities
+
+- Guided assessment lifecycle from employee request to skill calibration
+- Role-based blueprint and question selection
+- Human-in-the-loop SME review before assignment
+- AI-generated assessment questions with governance controls
+- Scored evaluation with critical-failure logic
+- Training and skill-gap recommendations surfaced in a dashboard
 
 ## Architecture
 
-- **UI:** Streamlit numbered pages under `pages/`.
-- **Reference data:** `Talent360i_Input_Dataset.xlsx`, loaded read-only with pandas.
-- **Application data:** `Talent360i_Output.xlsx`, created as a copy of the input workbook on first write.
-- **Workbook access:** `db.py` reads and replaces individual tabs with pandas and openpyxl.
-- **Workflow rules:** `workflow.py` merges input question data with the latest output review decisions.
-- **AI generation:** `ai.py` calls OpenAI and expects JSON multiple-choice questions.
-- **Validation:** `utils.py` parses and validates generated questions.
+```mermaid
+flowchart TD
+    U[Streamlit UI
+    pages/1_Employee_Request.py
+    pages/2_Manager_Assignment.py
+    pages/3_Reviewer_Approval.py
+    pages/4_Employee_Assessment.py
+    pages/5_Manager_Review.py
+    pages/6_Admin_Question_Bank.py
+    pages/7_Dashboard.py] --> W[Workbook Layer
+    Talent360i_Input_Dataset.xlsx
+    Talent360i_Output.xlsx]
+    W --> DB[db.py
+    pandas + openpyxl]
+    DB --> WF[workflow.py
+    Merge rules + decisions]
+    WF --> AI[ai.py
+    OpenAI question generation]
+    AI --> VAL[utils.py
+    validation + parsing]
+    VAL --> DASH[Dashboard and insights]
+```
 
-The input workbook must contain the reference tabs used by the pages, including `Users_Teams`, `Role_Master`, `Role_Skill_Map`, `Proficiency_Levels`, `Assessment_Blueprints`, `Assessment_Schedules`, `Assessment_QBank`, `Assessment_Results`, `User_Skill_Assessments`, `Skill_Gaps_TNI`, and `Training_Skill_Map`.
+### Active system components
 
-## End-to-End Workflow
+- **UI:** Streamlit pages under `pages/`
+- **Reference data:** `Talent360i_Input_Dataset.xlsx`, loaded read-only with pandas
+- **Application data:** `Talent360i_Output.xlsx`, created as a copy of the input workbook on first write
+- **Workbook access:** `db.py` reads and writes individual tabs with pandas and openpyxl
+- **Workflow logic:** `workflow.py` merges input question data with latest output review decisions
+- **AI generation:** `ai.py` calls OpenAI and expects JSON multiple-choice questions
+- **Validation:** `utils.py` parses and validates generated questions
 
-1. **Employee Request** (`pages/1_Employee_Request.py`)
-   - Select a seeded user, role-mapped skill, and target proficiency level.
-   - Append an `Assessment_Requests` row with status `Requested`.
-   - Append the request event to `App_Audit_Log`.
+The input workbook must include the reference tabs used by the app, including:
+`Users_Teams`, `Role_Master`, `Role_Skill_Map`, `Proficiency_Levels`, `Assessment_Blueprints`, `Assessment_Schedules`, `Assessment_QBank`, `Assessment_Results`, `User_Skill_Assessments`, `Skill_Gaps_TNI`, and `Training_Skill_Map`.
 
-2. **Manager Assignment** (`pages/2_Manager_Assignment.py`)
-   - Select a blueprint for the employee's role.
-   - Find approved questions for the blueprint and skill, falling back to approved questions from the blueprint when necessary.
-   - Select five questions and create `Assessment_Assignments` plus `Assessment_Assignment_Questions` rows.
-   - The request status changes to `Assigned`.
-   - Assignment uses the first available schedule, preferring `Ready to Schedule`.
+## End-to-end workflow
 
-3. **Reviewer Approval** (`pages/3_Reviewer_Approval.py`)
-   - Select pending questions individually.
-   - Record approval in `SME_Review_Workflow` with reviewer role, decision, review date, and human-in-the-loop completion.
-   - Only questions with effective status `Approved` and `approved_for_schedule == Yes` are assignable.
+### 1) Employee Request
 
-4. **Employee Assessment** (`pages/4_Employee_Assessment.py`)
-   - Select an employee and an incomplete assignment.
-   - Answer the assigned questions only.
-   - Record each response in `Assessment_Responses`.
-   - Calculate a percentage score and critical-question failure.
-   - Write an `Assessment_Results` row with status `Scored`; mark the assignment `Completed`.
+Page: `pages/1_Employee_Request.py`
 
-5. **Manager Review** (`pages/5_Manager_Review.py`)
-   - Review scored results and choose a calibrated proficiency level.
-   - Change the result status to `Calibrated`.
-   - Write `User_Skill_Assessments` and `Skill_Gaps_TNI` records using the role target level and `Training_Skill_Map`.
+- Select a seeded user, role-mapped skill, and target proficiency level
+- Append an `Assessment_Requests` row with status `Requested`
+- Append the request event to `App_Audit_Log`
 
-6. **Admin Question Bank** (`pages/6_Admin_Question_Bank.py`)
-   - Generate ten questions for a role, blueprint, skill, and target level.
-   - Save each question to `Assessment_QBank` as `Pending SME Review` and `approved_for_schedule == No`.
-   - Reviewers must approve generated questions before assignment.
+### 2) Manager Assignment
 
-7. **Talent Dashboard** (`pages/7_Dashboard.py`)
-   - Combine reference and application-created results, skill assessments, and gaps.
-   - Show assessment counts, scored/calibrated results, skill levels, high gaps, and training recommendations.
+Page: `pages/2_Manager_Assignment.py`
 
-## Scoring Rules
+- Select a blueprint for the employee's role
+- Find approved questions for the blueprint and skill, falling back to approved questions from the blueprint when necessary
+- Select five questions and create `Assessment_Assignments` and `Assessment_Assignment_Questions` rows
+- Change request status to `Assigned`
+- Use the first available schedule, preferring `Ready to Schedule`
 
-- `score_pct` is the percentage of assigned questions answered correctly.
-- The pass threshold is `75` percent.
-- A question with `critical_flag == Yes` answered incorrectly sets `critical_fail_flag` to `Yes` and causes a fail regardless of percentage.
-- The stored recommendation is `min(5, int(score_pct // 20))`.
-- Managers can calibrate the recommended level before downstream skill-gap records are created.
+### 3) Reviewer Approval
 
-## Output Tabs
+Page: `pages/3_Reviewer_Approval.py`
 
-The application creates or updates these tabs in `Talent360i_Output.xlsx`: `Assessment_Requests`, `Assessment_Assignments`, `Assessment_Assignment_Questions`, `Assessment_Responses`, `Assessment_Results`, `SME_Review_Workflow`, `User_Skill_Assessments`, `Skill_Gaps_TNI`, and `App_Audit_Log`.
+- Review pending questions individually
+- Record approval in `SME_Review_Workflow` with reviewer role, decision, review date, and completion status
+- Only questions with effective status `Approved` and `approved_for_schedule == Yes` are assignable
 
-## Running Locally
+### 4) Employee Assessment
+
+Page: `pages/4_Employee_Assessment.py`
+
+- Select an employee and an incomplete assignment
+- Answer only the assigned questions
+- Record each response in `Assessment_Responses`
+- Calculate score percentage and critical-question failure
+- Write an `Assessment_Results` row with status `Scored` and mark the assignment `Completed`
+
+### 5) Manager Review
+
+Page: `pages/5_Manager_Review.py`
+
+- Review scored results and choose a calibrated proficiency level
+- Change result status to `Calibrated`
+- Write `User_Skill_Assessments` and `Skill_Gaps_TNI` using the role target level and `Training_Skill_Map`
+
+### 6) Admin Question Bank
+
+Page: `pages/6_Admin_Question_Bank.py`
+
+- Generate ten questions for a role, blueprint, skill, and target level
+- Save each generated question to `Assessment_QBank` as `Pending SME Review` with `approved_for_schedule == No`
+- Require reviewer approval before assignment is possible
+
+### 7) Talent Dashboard
+
+Page: `pages/7_Dashboard.py`
+
+- Combine reference and application-created results, skill assessments, and gaps
+- Show assessment counts, scored or calibrated results, skill levels, high gaps, and training recommendations
+
+## Decision and scoring rules
+
+- `score_pct` = percentage of assigned questions answered correctly
+- Pass threshold = `75%`
+- A question with `critical_flag == Yes` answered incorrectly sets `critical_fail_flag` to `Yes` and fails the assessment regardless of percentage
+- Recommendation logic: `min(5, int(score_pct // 20))`
+- Managers can calibrate recommended levels before downstream skill-gap records are created
+
+## Output workbook tabs
+
+The app creates or updates these tabs in `Talent360i_Output.xlsx`:
+
+- `Assessment_Requests`
+- `Assessment_Assignments`
+- `Assessment_Assignment_Questions`
+- `Assessment_Responses`
+- `Assessment_Results`
+- `SME_Review_Workflow`
+- `User_Skill_Assessments`
+- `Skill_Gaps_TNI`
+- `App_Audit_Log`
+
+## Project structure
+
+```text
+Talent360/
+├── app.py
+├── ai.py
+├── db.py
+├── workflow.py
+├── utils.py
+├── validate.py
+├── seed.py
+├── models.py
+├── services.py
+├── theme.py
+├── README.md
+├── requirements.txt
+├── pages/
+│   ├── 1_Employee_Request.py
+│   ├── 2_Manager_Assignment.py
+│   ├── 3_Reviewer_Approval.py
+│   ├── 4_Employee_Assessment.py
+│   ├── 5_Manager_Review.py
+│   ├── 6_Admin_Question_Bank.py
+│   ├── 7_Dashboard.py
+│   ├── 8_Architecture.py
+│   └── 9_Data_Map.py
+├── tools/
+│   └── compile_check.py
+├── .env.example (if used locally)
+└── Talent360i_Input_Dataset.xlsx
+```
+
+## Running locally
 
 Place the input workbook in the project directory, then run:
 
@@ -77,9 +195,13 @@ Place the input workbook in the project directory, then run:
 streamlit run app.py
 ```
 
-Open the local URL shown by Streamlit, normally `http://localhost:8501`.
+Open the local Streamlit URL, usually:
 
-For AI question generation, create `.env` with:
+```text
+http://localhost:8501
+```
+
+For AI question generation, create a `.env` file with:
 
 ```text
 OPENAI_API_KEY=your-openai-api-key
@@ -87,7 +209,7 @@ OPENAI_API_KEY=your-openai-api-key
 
 The configured model is `gpt-4` and the prompt version is `v2`. Never commit `.env`, API keys, or generated output workbooks containing sensitive data.
 
-## Demo Walkthrough
+## Demo walkthrough
 
 1. Start the app and open `1. Employee Request`.
 2. Select a seeded user, mapped skill, and target level; submit the request.
@@ -98,6 +220,18 @@ The configured model is `gpt-4` and the prompt version is `v2`. Never commit `.e
 7. Open `5. Manager Review`, choose the calibrated level, and confirm it.
 8. Open `7. Dashboard` to inspect results, skill gaps, and training recommendations.
 
-## Validation and Legacy Notes
+## Validation and legacy notes
 
-Run `python -m py_compile app.py db.py workflow.py ai.py utils.py pages/*.py` to catch syntax errors. `validate.py`, `seed.py`, `models.py`, and `services.py` contain older SQLite or separate-workbook assumptions and should not be treated as the active workflow contract without review. The current pages do not implement duplicate-request prevention, evidence capture, expiry enforcement, question-bank rejection, manager send-back, or study-plan persistence.
+Run the syntax check:
+
+```bash
+python -m py_compile app.py db.py workflow.py ai.py utils.py pages/*.py
+```
+
+Legacy files such as `validate.py`, `seed.py`, `models.py`, and `services.py` contain older SQLite or separate-workbook assumptions and should not be treated as the active workflow contract without review.
+
+The current pages do not yet implement duplicate-request prevention, evidence capture, expiry enforcement, question-bank rejection, manager send-back, or study-plan persistence.
+
+## Why this app matters
+
+Talent 360 helps organizations move from ad hoc skill reviews to a more structured, auditable talent operating model. It aligns employee capability signals with manager judgment, SME review, and data-backed development recommendations without losing the human decision layer that makes talent management credible.
