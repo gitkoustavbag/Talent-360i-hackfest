@@ -5,9 +5,9 @@ import streamlit as st
 
 from ai import generate_questions
 from db import append_output_row, load_input_sheet, load_optional_output_sheet
-from utils import answer_to_option, parse_questions, validate_question
+from utils import answer_to_option, normalize_difficulty, parse_questions, validate_question
 from theme import apply_theme, audience_banner
-from workflow import effective_question_bank, question_needs_sme_review
+from workflow import evaluate_question_mix, effective_question_bank, question_needs_sme_review
 
 apply_theme("governance")
 
@@ -43,6 +43,7 @@ if question_bank.empty:
     summary["approved"] = 0
     summary["pending_review"] = 0
     summary["difficulty_mix"] = ""
+    summary["difficulty_mix_status"] = "Incomplete"
 else:
     inventory = question_bank.copy()
     inventory["generated"] = (
@@ -72,6 +73,10 @@ else:
                     for difficulty, count in values.fillna("Unknown").value_counts().items()
                 ),
             ),
+            difficulty_mix_status=(
+                "difficulty",
+                lambda values: "Pending approval",
+            ),
         )
         .reset_index()
     )
@@ -84,6 +89,18 @@ else:
         ["generated", "approved", "pending_review"]
     ].fillna(0).astype(int)
     summary["difficulty_mix"] = summary["difficulty_mix"].fillna("")
+    approved_mix = inventory[inventory["approved"]].groupby(
+        ["role_id", "role_name", "blueprint_id", "skill_id", "skill"],
+        dropna=False,
+    ).apply(
+        lambda group: evaluate_question_mix(group)["status"]
+    ).reset_index(name="difficulty_mix_status")
+    summary = summary.drop(columns=["difficulty_mix_status"]).merge(
+        approved_mix,
+        on=["role_id", "role_name", "blueprint_id", "skill_id", "skill"],
+        how="left",
+    )
+    summary["difficulty_mix_status"] = summary["difficulty_mix_status"].fillna("Incomplete")
     summary["need_to_generate"] = (5 - summary["generated"]).clip(lower=0)
     summary["need_approval"] = (5 - summary["approved"]).clip(lower=0)
 summary["need_to_generate"] = (5 - summary["generated"]).clip(lower=0)
@@ -102,6 +119,7 @@ summary = summary.rename(
         "approved": "Approved",
         "pending_review": "Pending review",
         "difficulty_mix": "Difficulty mix",
+        "difficulty_mix_status": "Mix status",
         "need_to_generate": "Need to generate",
         "need_approval": "Need approval",
         "next_action": "Next action",
@@ -148,6 +166,7 @@ else:
                 "Approved",
                 "Pending review",
                 "Difficulty mix",
+                "Mix status",
                 "Need to generate",
                 "Next action",
             ]
@@ -179,6 +198,8 @@ with st.expander("View complete inventory"):
                 "Generated",
                 "Approved",
                 "Pending review",
+                "Difficulty mix",
+                "Mix status",
                 "Need to generate",
                 "Need approval",
                 "Next action",
@@ -276,7 +297,7 @@ if st.button("Generate Question Bank"):
         questions = parse_questions(raw)
         for question in questions:
             validate_question(question)
-        for question in questions:
+        for index, question in enumerate(questions):
             options = question["options"]
             answer = question["answer"]
             correct_option = answer_to_option(answer, options)
@@ -302,7 +323,9 @@ if st.button("Generate Question Bank"):
                     "option_d": options[3],
                     "correct_option": correct_option,
                     "critical_flag": "No",
-                    "difficulty": question.get("difficulty", "Medium"),
+                    "difficulty": normalize_difficulty(
+                        question.get("difficulty"), index=index, total=len(questions)
+                    ),
                     "ai_confidence": "",
                     "sme_review_status": "Pending SME Review",
                     "sme_action_required": "Review",

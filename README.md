@@ -133,6 +133,7 @@ Page: `pages/7_Dashboard.py`
 
 - Combine reference and application-created results, skill assessments, and gaps
 - Show assessment counts, scored or calibrated results, skill levels, high gaps, and training recommendations
+- Generate an optional AI portfolio summary from aggregated scores, outcomes, skill gaps, and course signals
 
 ## Decision and scoring rules
 
@@ -141,7 +142,11 @@ Page: `pages/7_Dashboard.py`
 - A question with `critical_flag == Yes` answered incorrectly sets `critical_fail_flag` to `Yes` and fails the assessment regardless of percentage
 - Recommendation logic uses workbook proficiency bands: `0`, `1`, `2`, `3`, `4`, and `5`
 - A critical failure forces `Fail` and lowers a high recommendation before calibration
+- Approved critical questions are schedulable; under the active `auto_fail` policy, an incorrect critical answer fails the assessment
 - Manager calibration requires validated evidence and SME signoff, and is limited to one level above or below the objective recommendation
+- Failed assessments can be sent back by the manager for reassessment; the original result remains preserved for audit
+- A five-question assignment must include at least one Easy, one Medium, and one Hard question
+- Ten-question AI banks request a 3 Easy / 4 Medium / 3 Hard distribution; SME approval status controls whether the mix is assignment-ready
 
 ## Output workbook tabs
 

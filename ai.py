@@ -1,3 +1,4 @@
+import json
 import os
 from dotenv import load_dotenv
 
@@ -67,7 +68,9 @@ def generate_questions(skill, level, count=10):
 
     prompt = f"""
 Generate {count} multiple choice questions for skill '{skill}'
-at level '{level}'.
+at level '{level}'. For a 10-question bank, use this difficulty mix:
+3 Easy, 4 Medium, and 3 Hard. For other counts, keep the distribution
+as balanced as possible across Easy, Medium, and Hard.
 
 Each question must contain:
 - id
@@ -124,3 +127,35 @@ Return ONLY JSON array.
         )
 
         return response.choices[0].message.content
+
+
+def summarize_dashboard(summary):
+    """Generate a concise leadership summary from aggregated dashboard metrics."""
+    prompt = f"""
+You are a talent analytics advisor. Summarize these aggregated assessment metrics:
+{json.dumps(summary, default=str)}
+
+Return a concise plain-text summary with exactly these sections:
+Executive summary
+Key signals
+Recommended actions
+
+Do not invent facts, names, scores, or causes that are not present in the data.
+Mention when the sample is small or data is incomplete.
+"""
+    messages = [
+        {
+            "role": "system",
+            "content": "You provide evidence-grounded talent analytics summaries.",
+        },
+        {"role": "user", "content": prompt},
+    ]
+    if PROVIDER == "openai":
+        response = get_client().chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.2,
+        )
+    else:
+        response = get_client().complete(model=MODEL, messages=messages)
+    return response.choices[0].message.content

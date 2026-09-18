@@ -3,7 +3,7 @@ from datetime import datetime
 from theme import apply_theme, audience_banner
 
 from db import append_output_row, load_input_sheet, load_optional_output_sheet, save_output_sheet
-from workflow import assessment_outcome, effective_question_bank
+from workflow import assessment_outcome, critical_question_failed, effective_question_bank
 
 apply_theme("employee")
 
@@ -67,9 +67,8 @@ else:
                     st.stop()
                 is_correct = answers[question["question_id"]] == option_map[correct_option]
                 correct += int(is_correct)
-                critical_failure = critical_failure or (
-                    str(question.get("critical_flag", "No")).strip().lower() == "yes"
-                    and not is_correct
+                critical_failure = critical_failure or critical_question_failed(
+                    question, answers[question["question_id"]]
                 )
                 append_output_row(
                     "Assessment_Responses",

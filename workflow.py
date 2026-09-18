@@ -1,6 +1,26 @@
 import pandas as pd
 
 from db import load_input_sheet, load_optional_output_sheet
+from utils import normalize_difficulty
+
+
+CRITICAL_QUESTION_POLICY = "auto_fail"
+
+
+def critical_question_failed(question_row, selected_answer):
+    """Return whether an incorrectly answered critical question triggers auto-fail."""
+    if CRITICAL_QUESTION_POLICY != "auto_fail":
+        return False
+    if str(question_row.get("critical_flag", "No")).strip().lower() != "yes":
+        return False
+    option_map = {
+        "A": question_row.get("option_a"),
+        "B": question_row.get("option_b"),
+        "C": question_row.get("option_c"),
+        "D": question_row.get("option_d"),
+    }
+    correct_option = str(question_row.get("correct_option", "")).strip().upper()
+    return correct_option in option_map and selected_answer != option_map[correct_option]
 
 
 def score_to_level(score_pct):
@@ -71,6 +91,17 @@ def finalize_manager_review(
     }
 
 
+def send_back_for_reassessment(pass_fail_formula, note=""):
+    """Validate the manager's reassessment decision for a failed result."""
+    if str(pass_fail_formula).strip().lower() != "fail":
+        raise ValueError("Only failed assessments can be sent back for reassessment.")
+    return {
+        "result_status": "Sent Back",
+        "assignment_status": "Not Started",
+        "manager_note": str(note).strip() or "Assessment sent back for reassessment.",
+    }
+
+
 def question_ready_for_schedule(question_row):
     """Return True only when a question meets the minimum SME approval and quality gates."""
     if isinstance(question_row, pd.Series):
@@ -94,9 +125,6 @@ def question_ready_for_schedule(question_row):
         return False
     if str(row.get("approved_for_schedule", "")).strip() != "Yes":
         return False
-    if str(row.get("critical_flag", "No")).strip().lower() == "yes":
-        return False
-
     raw_confidence = row.get("ai_confidence", "")
     confidence = (
         str(raw_confidence).strip().lower()
@@ -142,6 +170,82 @@ def deduplicate_open_requests(requests):
     return frame
 
 
+def build_tni_recommendation(target_level, current_level, training_map, skill_id, role_skill_map=None, role_id=None):
+    """Build a gap severity and development recommendation from workbook mappings."""
+    target = int(target_level)
+    current = int(current_level)
+    gap = max(target - current, 0)
+    severity = "No gap" if gap == 0 else "High" if gap >= 2 else "Moderate"
+
+    mapped = training_map.copy() if isinstance(training_map, pd.DataFrame) else pd.DataFrame(training_map)
+    if not mapped.empty and "skill_id" in mapped.columns:
+        mapped = mapped[mapped["skill_id"].astype(str).str.strip() == str(skill_id).strip()]
+
+    course_ids = []
+    if not mapped.empty and "course_id" in mapped.columns:
+        course_ids = [
+            str(value).strip()
+            for value in mapped["course_id"].dropna().tolist()
+            if str(value).strip()
+        ]
+    course_ids = list(dict.fromkeys(course_ids))
+    course_id = ", ".join(course_ids) if course_ids else None
+
+    if gap == 0:
+        recommendation = "No action - at target"
+    elif course_id:
+        recommendation = "Assign mapped microlearning / scenario lab and reassess"
+    else:
+        recommendation = "Create a development action and reassess; no mapped course is available"
+
+    cross_functional = ""
+    if role_skill_map is not None and role_id is not None:
+        role_rows = role_skill_map[
+            (role_skill_map["role_id"].astype(str).str.strip() == str(role_id).strip()) &
+            (role_skill_map["skill_id"].astype(str).str.strip() != str(skill_id).strip())
+        ]
+        if not role_rows.empty and "skill" in role_rows.columns:
+            adjacent_skills = list(dict.fromkeys(role_rows["skill"].dropna().astype(str).tolist()))
+            if adjacent_skills:
+                cross_functional = "Consider adjacent skill exposure: " + ", ".join(adjacent_skills[:3])
+
+    return {
+        "gap": gap,
+        "severity": severity,
+        "course_id": course_id,
+        "recommendation": recommendation,
+        "cross_functional_recommendation": cross_functional,
+    }
+
+
+DEFAULT_DIFFICULTY_MINIMUMS = {"easy": 1, "medium": 1, "hard": 1}
+
+
+def evaluate_question_mix(questions, minimums=None):
+    """Check whether a question set contains the minimum difficulty mix."""
+    required = minimums or DEFAULT_DIFFICULTY_MINIMUMS
+    if isinstance(questions, pd.DataFrame):
+        values = questions.get("difficulty", pd.Series(dtype=str)).tolist()
+    else:
+        values = [question.get("difficulty") for question in questions]
+
+    counts = {}
+    for value in values:
+        difficulty = str(value).strip().lower()
+        if difficulty:
+            counts[difficulty] = counts.get(difficulty, 0) + 1
+    missing = {
+        difficulty: minimum - counts.get(difficulty, 0)
+        for difficulty, minimum in required.items()
+        if counts.get(difficulty, 0) < minimum
+    }
+    return {
+        "status": "Complete" if not missing else "Incomplete",
+        "counts": counts,
+        "missing": missing,
+    }
+
+
 def get_approved_questions_for_assignment(question_bank, blueprint_id, role_id, skill_id):
     """Return only questions that are ready for scheduling for a given blueprint/role/skill."""
     if isinstance(question_bank, pd.DataFrame):
@@ -166,6 +270,21 @@ def get_approved_questions_for_assignment(question_bank, blueprint_id, role_id, 
     return df[ready_mask].reset_index(drop=True)
 
 
+def _normalize_question_bank_difficulty(questions):
+    if "difficulty" not in questions.columns:
+        return questions
+    for _, group in questions.groupby(
+        ["blueprint_id", "role_id", "skill_id"], dropna=False
+    ):
+        for position, index in enumerate(group.index):
+            questions.loc[index, "difficulty"] = normalize_difficulty(
+                questions.loc[index, "difficulty"],
+                index=position,
+                total=len(group),
+            )
+    return questions
+
+
 def effective_question_bank():
     """Return complete questions from input and generated output data."""
     input_questions = load_input_sheet("Assessment_QBank")
@@ -186,6 +305,7 @@ def effective_question_bank():
     if reviews.empty or "question_id" not in reviews.columns:
         questions["sme_review_status"] = questions.get("sme_review_status", "Pending SME Review")
         questions["approved_for_schedule"] = questions.get("approved_for_schedule", "No")
+        questions = _normalize_question_bank_difficulty(questions)
         questions["ready_for_schedule"] = questions.apply(question_ready_for_schedule, axis=1)
         return questions
 
@@ -207,5 +327,6 @@ def effective_question_bank():
     if "approved_for_schedule" not in questions.columns:
         questions["approved_for_schedule"] = "No"
 
+    questions = _normalize_question_bank_difficulty(questions)
     questions["ready_for_schedule"] = questions.apply(question_ready_for_schedule, axis=1)
     return questions

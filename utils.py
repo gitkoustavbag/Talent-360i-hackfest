@@ -110,3 +110,21 @@ def answer_to_option(answer, options):
     raise ValueError(
         f"Answer {answer_text!r} must be A-D or match one of the four options"
     )
+
+
+def normalize_difficulty(value, index=None, total=None):
+    """Return a valid Easy/Medium/Hard label without confusing target level with difficulty."""
+    normalized = str(value).strip().lower() if value is not None else ""
+    if normalized in {"easy", "medium", "hard"}:
+        return normalized.title()
+
+    if index is not None and total:
+        easy_end = max(1, round(total * 0.3))
+        medium_end = easy_end + max(1, round(total * 0.4))
+        if index < easy_end:
+            return "Easy"
+        if index < medium_end:
+            return "Medium"
+        return "Hard"
+
+    return "Unclassified"

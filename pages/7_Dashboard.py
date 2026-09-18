@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from theme import apply_theme, audience_banner
 
+from ai import summarize_dashboard
 from db import load_input_sheet, load_optional_output_sheet
 
 apply_theme("analytics")
@@ -35,6 +36,38 @@ with col3:
     st.metric("Calibrated", int((results["result_status"] == "Calibrated").sum()))
 with col4:
     st.metric("High Skill Gaps", int((gaps["gap_severity"] == "High").sum()))
+
+st.subheader("AI Portfolio Summary")
+st.caption("Generate an evidence-grounded summary from aggregated results and skill gaps.")
+if st.button("Generate AI Summary"):
+    score_values = pd.to_numeric(results.get("score_pct", pd.Series(dtype=float)), errors="coerce").dropna()
+    gap_counts = (
+        gaps["skill"].value_counts().head(5).to_dict()
+        if "skill" in gaps.columns
+        else {}
+    )
+    course_values = (
+        gaps["recommended_course_id"].dropna().astype(str).replace("", pd.NA).dropna().unique().tolist()
+        if "recommended_course_id" in gaps.columns
+        else []
+    )
+    summary_payload = {
+        "assessment_count": len(results),
+        "scored_count": int((results["result_status"] == "Scored").sum()),
+        "calibrated_count": int((results["result_status"] == "Calibrated").sum()),
+        "average_score_pct": round(float(score_values.mean()), 2) if not score_values.empty else None,
+        "pass_count": int((results.get("pass_fail_formula", pd.Series(dtype=str)) == "Pass").sum()),
+        "fail_count": int((results.get("pass_fail_formula", pd.Series(dtype=str)) == "Fail").sum()),
+        "critical_fail_count": int((results.get("critical_fail_flag", pd.Series(dtype=str)) == "Yes").sum()),
+        "gap_counts_by_skill": gap_counts,
+        "high_gap_count": int((gaps.get("gap_severity", pd.Series(dtype=str)) == "High").sum()),
+        "recommended_courses": course_values[:10],
+    }
+    try:
+        with st.spinner("Analyzing the portfolio..."):
+            st.markdown(summarize_dashboard(summary_payload))
+    except Exception as error:
+        st.warning(f"AI summary unavailable: {error}")
 
 st.subheader("Assessment Results")
 st.dataframe(

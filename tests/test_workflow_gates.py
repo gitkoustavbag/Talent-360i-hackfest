@@ -2,17 +2,86 @@ import unittest
 
 import pandas as pd
 
-from utils import answer_to_option
+from utils import answer_to_option, normalize_difficulty
 from workflow import (
     finalize_manager_review,
     deduplicate_open_requests,
+    build_tni_recommendation,
+    critical_question_failed,
+    evaluate_question_mix,
     get_approved_questions_for_assignment,
     question_needs_sme_review,
     question_ready_for_schedule,
+    send_back_for_reassessment,
 )
 
 
 class WorkflowGateTests(unittest.TestCase):
+    def test_failed_assessment_can_be_sent_back_for_reassessment(self):
+        transition = send_back_for_reassessment("Fail", "Revisit control evidence.")
+        self.assertEqual(transition["result_status"], "Sent Back")
+        self.assertEqual(transition["assignment_status"], "Not Started")
+        self.assertEqual(transition["manager_note"], "Revisit control evidence.")
+
+    def test_passed_assessment_cannot_be_sent_back(self):
+        with self.assertRaises(ValueError):
+            send_back_for_reassessment("Pass")
+
+    def test_approved_critical_question_can_be_scheduled(self):
+        row = {
+            "question_id": "Q-CRIT",
+            "question_text": "Critical question",
+            "option_a": "Correct",
+            "option_b": "Wrong",
+            "option_c": "Other",
+            "option_d": "None",
+            "correct_option": "A",
+            "sme_review_status": "Approved",
+            "approved_for_schedule": "Yes",
+            "critical_flag": "Yes",
+        }
+        self.assertTrue(question_ready_for_schedule(row))
+        self.assertTrue(critical_question_failed(row, "Wrong"))
+        self.assertFalse(critical_question_failed(row, "Correct"))
+
+    def test_normalize_difficulty_does_not_show_target_level_as_difficulty(self):
+        self.assertEqual(normalize_difficulty(4), "Unclassified")
+
+    def test_normalize_difficulty_balances_invalid_generated_values(self):
+        self.assertEqual(normalize_difficulty(4, index=0, total=10), "Easy")
+        self.assertEqual(normalize_difficulty(4, index=4, total=10), "Medium")
+        self.assertEqual(normalize_difficulty(4, index=8, total=10), "Hard")
+
+    def test_question_mix_requires_easy_medium_and_hard(self):
+        questions = pd.DataFrame(
+            [
+                {"difficulty": "Easy"},
+                {"difficulty": "Medium"},
+                {"difficulty": "Medium"},
+                {"difficulty": "Hard"},
+                {"difficulty": "Medium"},
+            ]
+        )
+        mix = evaluate_question_mix(questions)
+        self.assertEqual(mix["status"], "Complete")
+
+    def test_question_mix_reports_missing_difficulty(self):
+        mix = evaluate_question_mix([{"difficulty": "Medium"}] * 5)
+        self.assertEqual(mix["status"], "Incomplete")
+        self.assertEqual(mix["missing"], {"easy": 1, "hard": 1})
+
+    def test_tni_recommendation_maps_gap_and_training(self):
+        training = pd.DataFrame([{"skill_id": "S1", "course_id": "COURSE-1"}])
+        tni = build_tni_recommendation(4, 2, training, "S1")
+        self.assertEqual(tni["gap"], 2)
+        self.assertEqual(tni["severity"], "High")
+        self.assertEqual(tni["course_id"], "COURSE-1")
+
+    def test_tni_recommendation_handles_unmapped_skill(self):
+        tni = build_tni_recommendation(3, 3, pd.DataFrame(), "S1")
+        self.assertEqual(tni["severity"], "No gap")
+        self.assertEqual(tni["recommendation"], "No action - at target")
+
     def test_duplicate_open_requests_keep_only_the_newest(self):
         requests = pd.DataFrame(
             [

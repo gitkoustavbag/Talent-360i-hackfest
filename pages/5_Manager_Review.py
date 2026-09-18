@@ -3,7 +3,12 @@ from datetime import datetime
 from theme import apply_theme, audience_banner
 
 from db import append_output_row, load_input_sheet, load_optional_output_sheet, save_output_sheet
-from workflow import effective_question_bank, finalize_manager_review
+from workflow import (
+    build_tni_recommendation,
+    effective_question_bank,
+    finalize_manager_review,
+    send_back_for_reassessment,
+)
 
 apply_theme("manager")
 
@@ -78,6 +83,28 @@ else:
             "SME signoff recorded",
             key=f"sme_{result['result_id']}",
         )
+        reassessment_note = st.text_area(
+            "Reassessment note",
+            value="",
+            placeholder="Explain what the employee should revisit before resubmitting.",
+            key=f"reassessment_note_{result['result_id']}",
+        )
+        if str(result.get("pass_fail_formula", "")).strip().lower() == "fail":
+            if st.button("Send Back for Reassessment", key=f"send_back_{result['result_id']}"):
+                transition = send_back_for_reassessment(
+                    result["pass_fail_formula"], reassessment_note
+                )
+                result_index = results["result_id"] == result["result_id"]
+                results.loc[result_index, "result_status"] = transition["result_status"]
+                results.loc[result_index, "manager_note"] = transition["manager_note"]
+                save_output_sheet("Assessment_Results", results)
+                assignment_index = assignments["assignment_id"] == result["assignment_id"]
+                assignments.loc[assignment_index, "assignment_status"] = transition["assignment_status"]
+                assignments.loc[assignment_index, "notes"] = transition["manager_note"]
+                save_output_sheet("Assessment_Assignments", assignments)
+                st.success(
+                    f"Assessment sent back to {result['user_id']} for reassessment."
+                )
         if st.button("Confirm Calibration", key=f"calibrate_{result['result_id']}"):
             review = finalize_manager_review(
                 result["score_pct"],
@@ -96,10 +123,14 @@ else:
             results.loc[result_index, "sme_signoff"] = "Yes"
             results.loc[result_index, "result_status"] = "Calibrated"
             save_output_sheet("Assessment_Results", results)
-            gap = max(target_level - int(review["final_level"]), 0)
-            severity = "No gap" if gap == 0 else "High" if gap >= 2 else "Moderate"
-            mapped_training = training_map[training_map["skill_id"] == question["skill_id"]]
-            course_id = mapped_training["course_id"].iloc[0] if not mapped_training.empty else None
+            tni = build_tni_recommendation(
+                target_level,
+                review["final_level"],
+                training_map,
+                question["skill_id"],
+                role_skill_map=role_skills,
+                role_id=assignment["role_id"],
+            )
             append_output_row(
                 "User_Skill_Assessments",
                 {
@@ -132,11 +163,11 @@ else:
                     "capability": question["skill"],
                     "target_level": target_level,
                     "current_level": review["final_level"],
-                    "gap_level_formula": gap,
-                    "gap_severity": severity,
-                    "recommended_course_id": course_id,
-                    "tni_recommendation": "No action - at target" if gap == 0 else "Assign mapped microlearning / scenario lab and reassess",
-                    "cross_functional_recommendation": "",
+                    "gap_level_formula": tni["gap"],
+                    "gap_severity": tni["severity"],
+                    "recommended_course_id": tni["course_id"],
+                    "tni_recommendation": tni["recommendation"],
+                    "cross_functional_recommendation": tni["cross_functional_recommendation"],
                 },
             )
             st.success(f"Calibration saved for {result['result_id']}.")

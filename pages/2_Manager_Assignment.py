@@ -3,7 +3,12 @@ import streamlit as st
 from db import append_output_row, load_input_sheet, load_optional_output_sheet
 from datetime import datetime
 from theme import apply_theme, audience_banner
-from workflow import deduplicate_open_requests, effective_question_bank, get_approved_questions_for_assignment
+from workflow import (
+    deduplicate_open_requests,
+    effective_question_bank,
+    evaluate_question_mix,
+    get_approved_questions_for_assignment,
+)
 
 apply_theme("manager")
 
@@ -84,12 +89,34 @@ else:
                 max_selections=target_count,
                 key=f"questions_{row['request_id']}",
                 format_func=lambda value: approved.loc[
-                    approved["question_id"] == value, "question_text"
-                ].iloc[0],
+                    approved["question_id"] == value
+                ].apply(
+                    lambda question: (
+                        f"[{str(question['difficulty']).strip().title()}] "
+                        f"{question['question_text']}"
+                    ),
+                    axis=1,
+                ).iloc[0],
             )
+            selected_questions = approved[approved["question_id"].isin(selected_ids)]
+            mix = evaluate_question_mix(selected_questions)
+            if selected_ids:
+                mix_counts = ", ".join(
+                    f"{difficulty.title()}: {count}"
+                    for difficulty, count in sorted(mix["counts"].items())
+                )
+                st.caption(f"Selected difficulty mix: {mix_counts or 'No difficulty labels'}")
+            if selected_ids and len(selected_ids) == target_count and mix["status"] != "Complete":
+                missing = ", ".join(
+                    f"{difficulty.title()} ({count})"
+                    for difficulty, count in mix["missing"].items()
+                )
+                st.warning(f"Question mix is incomplete. Add: {missing}.")
             if st.button("Assign Assessment", key=f"assign_{row['request_id']}"):
                 if len(selected_ids) != target_count:
                     st.error(f"Select exactly {target_count} questions.")
+                elif mix["status"] != "Complete":
+                    st.error("Select at least one Easy, one Medium, and one Hard question.")
                 else:
                     assignment_id = f"ASG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
                     append_output_row(
