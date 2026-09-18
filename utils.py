@@ -87,3 +87,26 @@ def validate_question(q):
     if q.get("answer") is None:
         raise ValueError("Missing answer")
     return True
+
+
+def answer_to_option(answer, options):
+    """Convert a generated answer into the workbook's A-D option format."""
+    if len(options) != 4:
+        raise ValueError("Must have exactly 4 options")
+
+    answer_text = str(answer).strip()
+    normalized = answer_text.upper().rstrip(".")
+    labels = {"A": 0, "B": 1, "C": 2, "D": 3}
+    if normalized in labels:
+        return normalized
+
+    if normalized.startswith("OPTION ") and normalized[-1:] in labels:
+        return normalized[-1]
+
+    option_values = [str(option).strip() for option in options]
+    if answer_text in option_values:
+        return "ABCD"[option_values.index(answer_text)]
+
+    raise ValueError(
+        f"Answer {answer_text!r} must be A-D or match one of the four options"
+    )

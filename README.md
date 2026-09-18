@@ -86,7 +86,7 @@ Page: `pages/1_Employee_Request.py`
 Page: `pages/2_Manager_Assignment.py`
 
 - Select a blueprint for the employee's role
-- Find approved questions for the blueprint and skill, falling back to approved questions from the blueprint when necessary
+- Find approved questions for the selected blueprint and requested skill
 - Select five questions and create `Assessment_Assignments` and `Assessment_Assignment_Questions` rows
 - Change request status to `Assigned`
 - Use the first available schedule, preferring `Ready to Schedule`
@@ -113,8 +113,9 @@ Page: `pages/4_Employee_Assessment.py`
 
 Page: `pages/5_Manager_Review.py`
 
-- Review scored results and choose a calibrated proficiency level
-- Change result status to `Calibrated`
+- Review scored results and propose a calibrated proficiency level
+- Validate evidence and record SME signoff before changing result status to `Calibrated`
+- Bound the final calibration to one level above or below the objective recommendation
 - Write `User_Skill_Assessments` and `Skill_Gaps_TNI` using the role target level and `Training_Skill_Map`
 
 ### 6) Admin Question Bank
@@ -124,6 +125,7 @@ Page: `pages/6_Admin_Question_Bank.py`
 - Generate ten questions for a role, blueprint, skill, and target level
 - Save each generated question to `Assessment_QBank` as `Pending SME Review` with `approved_for_schedule == No`
 - Require reviewer approval before assignment is possible
+- Show valid approved coverage and difficulty mix for each blueprint and skill
 
 ### 7) Talent Dashboard
 
@@ -137,8 +139,9 @@ Page: `pages/7_Dashboard.py`
 - `score_pct` = percentage of assigned questions answered correctly
 - Pass threshold = `75%`
 - A question with `critical_flag == Yes` answered incorrectly sets `critical_fail_flag` to `Yes` and fails the assessment regardless of percentage
-- Recommendation logic: `min(5, int(score_pct // 20))`
-- Managers can calibrate recommended levels before downstream skill-gap records are created
+- Recommendation logic uses workbook proficiency bands: `0`, `1`, `2`, `3`, `4`, and `5`
+- A critical failure forces `Fail` and lowers a high recommendation before calibration
+- Manager calibration requires validated evidence and SME signoff, and is limited to one level above or below the objective recommendation
 
 ## Output workbook tabs
 

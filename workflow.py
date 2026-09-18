@@ -40,6 +40,37 @@ def assessment_outcome(score_pct, critical_fail_flag=False, comment=None):
     }
 
 
+def finalize_manager_review(
+    score_pct,
+    manager_level,
+    evidence_validated=False,
+    sme_signoff=False,
+    critical_fail_flag=False,
+):
+    """Apply objective scoring, manager calibration, evidence, and SME gates."""
+    objective = assessment_outcome(score_pct, critical_fail_flag)
+    proposed_level = int(manager_level)
+    if proposed_level < 0 or proposed_level > 5:
+        raise ValueError("Manager level must be between 0 and 5.")
+
+    if not evidence_validated or not sme_signoff:
+        return {
+            "review_status": "Needs Evidence or SME Signoff",
+            "final_level": None,
+            "objective_level": objective["recommended_current_level"],
+            "calibration_delta": proposed_level - objective["recommended_current_level"],
+        }
+
+    objective_level = objective["recommended_current_level"]
+    final_level = max(objective_level - 1, min(objective_level + 1, proposed_level))
+    return {
+        "review_status": "Finalized",
+        "final_level": final_level,
+        "objective_level": objective_level,
+        "calibration_delta": final_level - objective_level,
+    }
+
+
 def question_ready_for_schedule(question_row):
     """Return True only when a question meets the minimum SME approval and quality gates."""
     if isinstance(question_row, pd.Series):
@@ -66,11 +97,49 @@ def question_ready_for_schedule(question_row):
     if str(row.get("critical_flag", "No")).strip().lower() == "yes":
         return False
 
-    confidence = str(row.get("ai_confidence", "")).strip().lower()
+    raw_confidence = row.get("ai_confidence", "")
+    confidence = (
+        str(raw_confidence).strip().lower()
+        if pd.notna(raw_confidence)
+        else ""
+    )
     if confidence and confidence not in {"high", "medium", "low"}:
         return False
 
     return True
+
+
+def question_needs_sme_review(status):
+    """Return whether a question should remain in the active SME review queue."""
+    return str(status).strip() in {
+        "Pending SME Review",
+        "Needs Revision",
+        "Needs Regeneration",
+    }
+
+
+def deduplicate_open_requests(requests):
+    """Keep the newest open request for each employee assessment context."""
+    if not isinstance(requests, pd.DataFrame) or requests.empty:
+        return requests.copy() if isinstance(requests, pd.DataFrame) else pd.DataFrame(requests)
+
+    frame = requests.copy()
+    if "status" not in frame.columns:
+        return frame
+
+    active_mask = frame["status"].astype(str).str.strip().eq("Requested")
+    key_columns = ["user_id", "role_id", "skill_id", "target_level"]
+    if not all(column in frame.columns for column in key_columns):
+        return frame
+
+    active = frame[active_mask].copy()
+    if active.empty:
+        return frame
+
+    duplicate_mask = active.duplicated(key_columns, keep="last")
+    duplicate_ids = active.loc[duplicate_mask, "request_id"]
+    frame.loc[frame["request_id"].isin(duplicate_ids), "status"] = "Duplicate"
+    return frame
 
 
 def get_approved_questions_for_assignment(question_bank, blueprint_id, role_id, skill_id):
@@ -83,9 +152,15 @@ def get_approved_questions_for_assignment(question_bank, blueprint_id, role_id, 
     if df.empty:
         return df
 
+    for column in ("blueprint_id", "role_id", "skill_id"):
+        if column in df.columns:
+            df[column] = df[column].astype(str).str.strip()
+
+    blueprint_id = str(blueprint_id).strip()
+    role_id = str(role_id).strip()
     df = df[(df.get("blueprint_id") == blueprint_id) & (df.get("role_id") == role_id)]
     if skill_id is not None:
-        df = df[df.get("skill_id") == skill_id]
+        df = df[df.get("skill_id") == str(skill_id).strip()]
 
     ready_mask = df.apply(question_ready_for_schedule, axis=1)
     return df[ready_mask].reset_index(drop=True)
@@ -111,6 +186,7 @@ def effective_question_bank():
     if reviews.empty or "question_id" not in reviews.columns:
         questions["sme_review_status"] = questions.get("sme_review_status", "Pending SME Review")
         questions["approved_for_schedule"] = questions.get("approved_for_schedule", "No")
+        questions["ready_for_schedule"] = questions.apply(question_ready_for_schedule, axis=1)
         return questions
 
     reviews = reviews.dropna(subset=["question_id"]).drop_duplicates(

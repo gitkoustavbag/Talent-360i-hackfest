@@ -4,7 +4,7 @@ from datetime import datetime
 from theme import apply_theme, audience_banner
 
 from db import append_output_row
-from workflow import effective_question_bank
+from workflow import effective_question_bank, question_needs_sme_review
 
 apply_theme("governance")
 
@@ -17,12 +17,18 @@ st.markdown("""
 audience_banner("governance", "Protect the quality bar", "Approve only the questions that are ready for employee use.", "✓")
 
 question_bank = effective_question_bank()
-pending = question_bank[question_bank["sme_review_status"] != "Approved"]
+pending = question_bank[
+    question_bank["sme_review_status"].map(question_needs_sme_review)
+]
 
 if pending.empty:
     st.info("No assessment questions awaiting SME review.")
 else:
     reviewer_role = st.text_input("Reviewer Role")
+    st.caption(
+        "This queue contains new, rewritten, or regeneration-requested questions. "
+        "Rejected questions are terminal and are not shown again."
+    )
     decision_map = {
         "Approve": ("Approved", "Yes", "Approved for schedule"),
         "Reject": ("Rejected", "No", "Rejected: not suitable"),
@@ -36,6 +42,7 @@ else:
             st.session_state[f"select_{question_id}"] = True
 
     selected_ids = set()
+    decisions = {}
     for _, question in pending.iterrows():
         selected = st.checkbox(
             f"{question['question_id']} | {question['question_text']}",
@@ -49,7 +56,7 @@ else:
             index=0,
             key=f"decision_{question['question_id']}",
         )
-        st.session_state[f"decision_{question['question_id']}"] = decision
+        decisions[question["question_id"]] = decision
 
     if st.button("Apply SME Decisions"):
         if not selected_ids:
@@ -58,7 +65,7 @@ else:
         decisions_applied = 0
         for question_id in selected_ids:
             question = pending[pending["question_id"] == question_id].iloc[0]
-            choice = st.session_state.get(f"decision_{question_id}", "Approve")
+            choice = decisions.get(question_id, "Approve")
             status, approved_for_schedule, comment = decision_map[choice]
             append_output_row(
                 "SME_Review_Workflow",

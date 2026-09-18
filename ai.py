@@ -11,10 +11,6 @@ PROVIDER = os.getenv("PROVIDER", "openai").lower()
 if PROVIDER == "openai":
     import openai
 
-    client = openai.OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY")
-    )
-
     MODEL = os.getenv("OPENAI_MODEL", "gpt-4")
 
 # =====================================================
@@ -23,14 +19,6 @@ if PROVIDER == "openai":
 elif PROVIDER == "azure":
     from azure.ai.inference import ChatCompletionsClient
     from azure.core.credentials import AzureKeyCredential
-
-    client = ChatCompletionsClient(
-        endpoint=os.getenv("AZURE_ENDPOINT"),
-        credential=AzureKeyCredential(
-            os.getenv("AZURE_API_KEY")
-        ),
-        api_version="2025-03-01-preview"
-    )
 
     MODEL = os.getenv(
         "AZURE_MODEL",
@@ -41,6 +29,38 @@ else:
     raise ValueError(
         f"Unsupported PROVIDER: {PROVIDER}"
     )
+
+
+client = None
+
+
+def get_client():
+    """Create the configured AI client only when question generation is requested."""
+    global client
+    if client is not None:
+        return client
+
+    if PROVIDER == "openai":
+        api_key = os.getenv("OPENAI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not configured. Add it to .env, then restart Streamlit."
+            )
+        client = openai.OpenAI(api_key=api_key)
+    else:
+        endpoint = os.getenv("AZURE_ENDPOINT", "").strip()
+        api_key = os.getenv("AZURE_API_KEY", "").strip()
+        if not endpoint or not api_key:
+            raise RuntimeError(
+                "AZURE_ENDPOINT and AZURE_API_KEY are not configured. Add them to .env, "
+                "then restart Streamlit."
+            )
+        client = ChatCompletionsClient(
+            endpoint=endpoint,
+            credential=AzureKeyCredential(api_key),
+            api_version="2025-03-01-preview",
+        )
+    return client
 
 
 def generate_questions(skill, level, count=10):
@@ -65,7 +85,7 @@ Return ONLY JSON array.
     # ==========================================
     if PROVIDER == "openai":
 
-        response = client.chat.completions.create(
+        response = get_client().chat.completions.create(
             model=MODEL,
             messages=[
                 {
@@ -88,7 +108,7 @@ Return ONLY JSON array.
     # ==========================================
     else:
 
-        response = client.complete(
+        response = get_client().complete(
             model=MODEL,
             messages=[
                 {

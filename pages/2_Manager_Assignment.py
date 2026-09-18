@@ -3,7 +3,7 @@ import streamlit as st
 from db import append_output_row, load_input_sheet, load_optional_output_sheet
 from datetime import datetime
 from theme import apply_theme, audience_banner
-from workflow import effective_question_bank, get_approved_questions_for_assignment
+from workflow import deduplicate_open_requests, effective_question_bank, get_approved_questions_for_assignment
 
 apply_theme("manager")
 
@@ -16,6 +16,14 @@ st.markdown("""
 audience_banner("manager", "Turn a request into a ready assessment", "Select the right blueprint, schedule, and approved questions.", "→")
 
 requests = load_optional_output_sheet("Assessment_Requests")
+original_request_statuses = requests["status"].copy() if "status" in requests else None
+requests = deduplicate_open_requests(requests)
+if (
+    original_request_statuses is not None and
+    not requests["status"].equals(original_request_statuses)
+):
+    from db import save_output_sheet
+    save_output_sheet("Assessment_Requests", requests)
 pending = requests[requests["status"] == "Requested"] if "status" in requests else requests
 
 if pending.empty:
@@ -49,21 +57,19 @@ else:
             row.get("skill_id"),
         )
         approved = skill_approved
-        if len(approved) < 5:
-            approved = get_approved_questions_for_assignment(
-                question_bank,
-                blueprint_id,
-                row["role_id"],
-                None,
-            )
 
         target_count = 5
         if matching_schedules.empty:
             st.warning("No schedule exists for this blueprint.")
         elif len(approved) < target_count:
             st.warning(
-                f"Only {len(approved)} approved questions are available for this blueprint. "
-                "Approve at least 5 questions before assignment."
+                f"Only {len(approved)} approved questions are available for "
+                f"{row['skill']} in this blueprint. Approve at least 5 questions "
+                "for this exact role, blueprint, and skill before assignment."
+            )
+            st.page_link(
+                "pages/6_Admin_Question_Bank.py",
+                label="Open Admin Question Bank to generate missing questions",
             )
         else:
             ready_schedules = matching_schedules[

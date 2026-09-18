@@ -3,7 +3,7 @@ from datetime import datetime
 from theme import apply_theme, audience_banner
 
 from db import append_output_row, load_input_sheet, load_optional_output_sheet, save_output_sheet
-from workflow import effective_question_bank
+from workflow import assessment_outcome, effective_question_bank
 
 apply_theme("employee")
 
@@ -68,7 +68,8 @@ else:
                 is_correct = answers[question["question_id"]] == option_map[correct_option]
                 correct += int(is_correct)
                 critical_failure = critical_failure or (
-                    question["critical_flag"] == "Yes" and not is_correct
+                    str(question.get("critical_flag", "No")).strip().lower() == "yes"
+                    and not is_correct
                 )
                 append_output_row(
                     "Assessment_Responses",
@@ -80,7 +81,11 @@ else:
                         "submitted_at": datetime.now().isoformat(timespec="seconds"),
                     },
                 )
+            if questions.empty:
+                st.error("This assessment has no scorable questions.")
+                st.stop()
             score = round(correct / len(questions) * 100, 2)
+            outcome = assessment_outcome(score, critical_failure)
             result_id = f"RST-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             append_output_row(
                 "Assessment_Results",
@@ -94,9 +99,9 @@ else:
                     "schedule_id": assignment["schedule_id"],
                     "score_pct": score,
                     "pass_threshold_pct": 75,
-                    "critical_fail_flag": "Yes" if critical_failure else "No",
-                    "pass_fail_formula": "Fail" if critical_failure or score < 75 else "Pass",
-                    "recommended_current_level": min(5, int(score // 20)),
+                    "critical_fail_flag": outcome["critical_fail_flag"],
+                    "pass_fail_formula": outcome["pass_fail_formula"],
+                    "recommended_current_level": outcome["recommended_current_level"],
                     "result_status": "Scored",
                     "ai_result_note": "Application-calculated result awaiting calibration",
                 },
