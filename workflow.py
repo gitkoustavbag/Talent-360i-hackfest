@@ -1,10 +1,12 @@
 import pandas as pd
+from datetime import datetime, timedelta, timezone
 
 from db import load_input_sheet, load_optional_output_sheet
 from utils import normalize_difficulty
 
 
 CRITICAL_QUESTION_POLICY = "auto_fail"
+MAX_REASSESSMENT_ATTEMPTS = 2
 
 
 def critical_question_failed(question_row, selected_answer):
@@ -91,13 +93,25 @@ def finalize_manager_review(
     }
 
 
-def send_back_for_reassessment(pass_fail_formula, note=""):
+def send_back_for_reassessment(
+    pass_fail_formula,
+    reassessment_attempts=0,
+    note="",
+    max_attempts=MAX_REASSESSMENT_ATTEMPTS,
+):
     """Validate the manager's reassessment decision for a failed result."""
     if str(pass_fail_formula).strip().lower() != "fail":
         raise ValueError("Only failed assessments can be sent back for reassessment.")
+    attempts = int(reassessment_attempts)
+    if attempts >= max_attempts:
+        raise ValueError(f"Maximum reassessment attempts ({max_attempts}) reached.")
+    next_attempt = attempts + 1
+    due_date = (datetime.now(timezone.utc) + timedelta(days=30)).date().isoformat()
     return {
         "result_status": "Sent Back",
         "assignment_status": "Not Started",
+        "reassessment_attempt": next_attempt,
+        "reassessment_due_date": due_date,
         "manager_note": str(note).strip() or "Assessment sent back for reassessment.",
     }
 
@@ -144,6 +158,14 @@ def question_needs_sme_review(status):
         "Needs Revision",
         "Needs Regeneration",
     }
+
+
+def review_question_text(original_text, edited_text):
+    """Validate and return the SME-edited question wording."""
+    text = str(edited_text).strip()
+    if not text:
+        raise ValueError("Question text cannot be blank.")
+    return text
 
 
 def deduplicate_open_requests(requests):

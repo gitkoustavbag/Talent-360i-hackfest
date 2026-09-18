@@ -38,7 +38,7 @@ output_tabs = [
     ("Assessment_Assignments", "Manager-created assessment assignments."),
     ("Assessment_Assignment_Questions", "Question IDs attached to each assignment."),
     ("Assessment_Responses", "Employee answers and correctness flags."),
-    ("Assessment_Results", "Scores, pass or fail status, and critical failures."),
+    ("Assessment_Results", "Scores, pass or fail status, critical failures, final levels, reassessment status, and manager notes."),
     ("User_Skill_Assessments", "Manager-calibrated employee skill levels."),
     ("Skill_Gaps_TNI", "Skill gaps and training needs for development action."),
     ("App_Audit_Log", "Trace of important workflow actions."),
@@ -126,12 +126,13 @@ with list_columns[1]:
 
 st.markdown("### Workflow hand-offs")
 flow = [
-    ("01", "Request", "Users_Teams + Role_Skill_Map + Proficiency_Levels", "Assessment_Requests", "#d9f4e8", "◎"),
-    ("02", "Assign", "Assessment_Blueprints + Assessment_Schedules + Assessment_QBank", "Assessment_Assignments + Assessment_Assignment_Questions", "#dceeff", "→"),
-    ("03", "Review", "Assessment_QBank", "SME_Review_Workflow", "#fff2bd", "✓"),
-    ("04", "Assess", "Assignment tabs + approved Assessment_QBank", "Assessment_Responses + Assessment_Results", "#fff0eb", "▣"),
-    ("05", "Calibrate", "Assessment_Results + Training_Skill_Map", "User_Skill_Assessments + Skill_Gaps_TNI", "#d9f4e8", "◈"),
-    ("06", "Generate", "Role_Master + Assessment_Blueprints + Role_Skill_Map", "Assessment_QBank", "#dceeff", "✦"),
+    ("01", "Request", "Users_Teams + Role_Skill_Map + Proficiency_Levels", "Assessment_Requests; duplicate requests marked", "#d9f4e8", "◎"),
+    ("02", "Generate", "Role_Master + Assessment_Blueprints + Role_Skill_Map + pending request", "Assessment_QBank with difficulty labels", "#dceeff", "✦"),
+    ("03", "Review", "Assessment_QBank", "SME_Review_Workflow; terminal rejected state", "#fff2bd", "✓"),
+    ("04", "Assign", "Assessment_Blueprints + Assessment_Schedules + ready Assessment_QBank", "Assessment_Assignments + Assessment_Assignment_Questions", "#dceeff", "→"),
+    ("05", "Assess", "Assignment tabs + approved Assessment_QBank", "Assessment_Responses + Assessment_Results", "#fff0eb", "▣"),
+    ("06", "Review", "Assessment_Results + Training_Skill_Map + Role_Skill_Map", "Final level, manager evidence/signoff, reassessment status, User_Skill_Assessments + Skill_Gaps_TNI", "#d9f4e8", "◈"),
+    ("07", "Interpret", "Assessment_Results + User_Skill_Assessments + Skill_Gaps_TNI", "Dashboard metrics and optional aggregated AI summary", "#fff2bd", "▤"),
 ]
 for number, title, reads, writes, color, icon in flow:
     st.markdown(

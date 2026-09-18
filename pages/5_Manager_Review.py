@@ -90,17 +90,32 @@ else:
             key=f"reassessment_note_{result['result_id']}",
         )
         if str(result.get("pass_fail_formula", "")).strip().lower() == "fail":
+            prior_attempts = int(
+                (
+                    (results["assignment_id"] == result["assignment_id"]) &
+                    (results["result_status"] == "Sent Back")
+                ).sum()
+            )
+            st.caption(f"Reassessment attempt: {prior_attempts + 1} of 2")
             if st.button("Send Back for Reassessment", key=f"send_back_{result['result_id']}"):
-                transition = send_back_for_reassessment(
-                    result["pass_fail_formula"], reassessment_note
-                )
+                try:
+                    transition = send_back_for_reassessment(
+                        result["pass_fail_formula"],
+                        reassessment_attempts=prior_attempts,
+                        note=reassessment_note,
+                    )
+                except ValueError as error:
+                    st.error(str(error))
+                    st.stop()
                 result_index = results["result_id"] == result["result_id"]
                 results.loc[result_index, "result_status"] = transition["result_status"]
                 results.loc[result_index, "manager_note"] = transition["manager_note"]
+                results.loc[result_index, "reassessment_attempt"] = transition["reassessment_attempt"]
                 save_output_sheet("Assessment_Results", results)
                 assignment_index = assignments["assignment_id"] == result["assignment_id"]
                 assignments.loc[assignment_index, "assignment_status"] = transition["assignment_status"]
                 assignments.loc[assignment_index, "notes"] = transition["manager_note"]
+                assignments.loc[assignment_index, "due_date"] = transition["reassessment_due_date"]
                 save_output_sheet("Assessment_Assignments", assignments)
                 st.success(
                     f"Assessment sent back to {result['user_id']} for reassessment."

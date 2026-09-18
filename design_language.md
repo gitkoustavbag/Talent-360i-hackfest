@@ -171,7 +171,7 @@ Manager, reviewer, and admin pages keep controls close to the workflow object th
 
 ### Dashboard
 
-The dashboard uses a metric row followed by dense tables. It favors scanning and comparison over decorative cards.
+The dashboard uses a portfolio-pulse hero followed by a compact metric row, visual outcome and capability analysis, an action-oriented high-gap list, and training signals. Raw workbook records stay available inside expandable detail sections instead of dominating the first view. The optional AI decision brief sits after the evidence panels so interpretation follows observation.
 
 ## Controls
 

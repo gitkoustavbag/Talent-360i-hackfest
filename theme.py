@@ -298,6 +298,19 @@ section[data-testid='stSidebar'] [data-testid='stSidebarNav'] a[aria-current='pa
 section[data-testid='stSidebar'] [data-testid='stSidebarNav'] a * {
   color: inherit !important;
 }
+/* Keep app.py as the launch target while presenting a product name in navigation. */
+section[data-testid='stSidebar'] [data-testid='stSidebarNav'] ul > li:first-child a {
+  font-size: 0 !important;
+}
+section[data-testid='stSidebar'] [data-testid='stSidebarNav'] ul > li:first-child a::after {
+  color: var(--ink-soft) !important;
+  content: 'Talent 360';
+  font-size: .9rem;
+}
+section[data-testid='stSidebar'] [data-testid='stSidebarNav'] ul > li:first-child a[aria-current='page']::after {
+  color: var(--ink) !important;
+  font-weight: 700;
+}
 div[data-testid='stAlert'], div[data-testid='stExpander'] { border-radius: 7px; }
 [data-testid='stBaseButton-primary'] {
   background: var(--mint-strong) !important;

@@ -12,16 +12,32 @@ from workflow import (
     get_approved_questions_for_assignment,
     question_needs_sme_review,
     question_ready_for_schedule,
+    review_question_text,
     send_back_for_reassessment,
 )
 
 
 class WorkflowGateTests(unittest.TestCase):
+    def test_sme_question_text_edit_is_trimmed(self):
+        self.assertEqual(review_question_text("Original", "  Revised wording  "), "Revised wording")
+
+    def test_sme_question_text_edit_cannot_be_blank(self):
+        with self.assertRaises(ValueError):
+            review_question_text("Original", "   ")
+
     def test_failed_assessment_can_be_sent_back_for_reassessment(self):
-        transition = send_back_for_reassessment("Fail", "Revisit control evidence.")
+        transition = send_back_for_reassessment(
+            "Fail", note="Revisit control evidence."
+        )
         self.assertEqual(transition["result_status"], "Sent Back")
         self.assertEqual(transition["assignment_status"], "Not Started")
+        self.assertEqual(transition["reassessment_attempt"], 1)
+        self.assertTrue(transition["reassessment_due_date"])
         self.assertEqual(transition["manager_note"], "Revisit control evidence.")
+
+    def test_reassessment_attempt_limit_is_enforced(self):
+        with self.assertRaises(ValueError):
+            send_back_for_reassessment("Fail", reassessment_attempts=2)
 
     def test_passed_assessment_cannot_be_sent_back(self):
         with self.assertRaises(ValueError):

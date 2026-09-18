@@ -3,10 +3,31 @@ import streamlit as st
 from datetime import datetime
 from theme import apply_theme, audience_banner
 
-from db import append_output_row
-from workflow import effective_question_bank, question_needs_sme_review
+from db import append_output_row, load_optional_output_sheet, save_output_sheet
+from workflow import effective_question_bank, question_needs_sme_review, review_question_text
 
 apply_theme("governance")
+
+st.markdown(
+        """
+        <style>
+        div[data-testid='stTextArea'] textarea {
+            background: #fff !important;
+            border: 1px solid #d9e3dd !important;
+            color: #17202a !important;
+            caret-color: #167a5a !important;
+        }
+        div[data-testid='stTextArea'] textarea::placeholder {
+            color: #718096 !important;
+        }
+        div[data-testid='stTextArea'] textarea:focus {
+            border-color: #167a5a !important;
+            box-shadow: 0 0 0 1px #167a5a !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+)
 
 st.markdown("""
 <div class="page-header">
@@ -43,6 +64,7 @@ else:
 
     selected_ids = set()
     decisions = {}
+    edited_texts = {}
     for _, question in pending.iterrows():
         selected = st.checkbox(
             f"{question['question_id']} | {question['question_text']}",
@@ -50,6 +72,12 @@ else:
         )
         if selected:
             selected_ids.add(question["question_id"])
+        edited_texts[question["question_id"]] = st.text_area(
+            f"Question text for {question['question_id']}",
+            value=str(question["question_text"]),
+            key=f"text_{question['question_id']}",
+            height=90,
+        )
         decision = st.selectbox(
             f"Decision for {question['question_id']}",
             list(decision_map.keys()),
@@ -67,6 +95,26 @@ else:
             question = pending[pending["question_id"] == question_id].iloc[0]
             choice = decisions.get(question_id, "Approve")
             status, approved_for_schedule, comment = decision_map[choice]
+            edited_text = review_question_text(
+                question["question_text"], edited_texts.get(question_id, "")
+            )
+            question_bank_output = load_optional_output_sheet("Assessment_QBank")
+            question_record = question.to_dict()
+            question_record["question_text"] = edited_text
+            question_record["data_label"] = "Application-created SME wording override"
+            if question_bank_output.empty:
+                question_bank_output = question_bank_output.from_records([question_record])
+            else:
+                matches = question_bank_output["question_id"] == question_id
+                if matches.any():
+                    last_match = question_bank_output.index[matches][-1]
+                    for column, value in question_record.items():
+                        question_bank_output.loc[last_match, column] = value
+                else:
+                    question_bank_output = question_bank_output.from_records(
+                        [question_record], columns=question_bank_output.columns
+                    )
+            save_output_sheet("Assessment_QBank", question_bank_output)
             append_output_row(
                 "SME_Review_Workflow",
                 {
