@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from theme import apply_theme, audience_banner
 
-from ai import summarize_dashboard
+from ai import build_dashboard_summary_payload, format_dashboard_summary_html, summarize_dashboard
 from db import load_input_sheet, load_optional_output_sheet
 
 apply_theme("analytics")
@@ -97,16 +97,67 @@ st.markdown(
         .ai-brief-copy { color: #594c6d !important; font-size: .83rem; margin-top: 3px; }
         .ai-brief-tag { color: #7351a8 !important; font-size: .68rem; font-weight: 700; letter-spacing: .1em; margin-left: auto; text-transform: uppercase; }
         .ai-result {
-            background: linear-gradient(135deg, #f4f0ff 0%, #fff8fc 100%);
-            border: 1px solid #cdbbe9;
-            border-left: 4px solid #7351a8;
-            border-radius: 10px;
-            box-shadow: 0 8px 22px rgba(74,52,111,.09);
+            background: linear-gradient(135deg, #f4f0ff 0%, #fffaf4 100%);
+            border: 1px solid #d6c8f6;
+            border-left: 5px solid #7351a8;
+            border-radius: 14px;
+            box-shadow: 0 10px 26px rgba(74,52,111,.09);
             margin: 1rem 0 1.25rem;
-            padding: 20px 22px;
+            padding: 22px 24px;
         }
-        .ai-result p, .ai-result li { color: #332b40 !important; }
-        .ai-result h1, .ai-result h2, .ai-result h3 { color: #24183c !important; }
+        .ai-result p, .ai-result li { color: #332b40 !important; line-height: 1.6; }
+        .ai-result h1, .ai-result h2, .ai-result h3 { color: #24183c !important; margin-top: 0; }
+        .ai-summary-section {
+            border-bottom: 1px solid rgba(115,81,168,.18);
+            color: #24183c !important;
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0 0 12px;
+            padding-bottom: 8px;
+        }
+        .ai-summary-list {
+            margin: 0 0 18px 1.2rem;
+            padding-left: 0.5rem;
+        }
+        .ai-summary-card {
+            background: rgba(255,255,255,.7);
+            border: 1px solid rgba(115,81,168,.18);
+            border-radius: 10px;
+            display: grid;
+            gap: 4px;
+            margin: 0 0 12px;
+            padding: 12px 14px;
+        }
+        .ai-summary-key {
+            color: #7351a8 !important;
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .ai-summary-value {
+            color: #2f2b40 !important;
+            font-size: .96rem;
+            line-height: 1.5;
+        }
+        .risk-badge {
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: .7rem;
+            font-weight: 700;
+            letter-spacing: .06em;
+            padding: 4px 10px;
+            text-transform: uppercase;
+        }
+        .risk-high { background: rgba(244,123,98,.12); color: #b34d39; }
+        .risk-moderate { background: rgba(242,184,74,.16); color: #8b5a00; }
+        .priority-panel {
+            background: linear-gradient(135deg, rgba(115,81,168,.06), rgba(22,122,90,.04));
+            border: 1px solid rgba(115,81,168,.18);
+            border-radius: 12px;
+            margin: 0 0 1rem;
+            padding: 14px 16px;
+        }
         @media (max-width: 700px) {
             .dashboard-hero { align-items: flex-start; display: block; }
             .dashboard-hero-stat { border-left: 0; margin-top: 20px; padding-left: 0; }
@@ -272,33 +323,41 @@ st.markdown(
         unsafe_allow_html=True,
 )
 st.caption("Uses aggregated scores, outcomes, gaps, and course signals. No raw employee answers are sent.")
+
+priority_actions = pd.DataFrame()
+if not gaps.empty and {"user_id", "skill", "recommended_course_id", "gap_severity"}.issubset(gaps.columns):
+    priority_actions = gaps[["user_id", "skill", "recommended_course_id", "gap_severity"]].dropna(subset=["recommended_course_id"]).copy()
+    priority_actions["risk_order"] = priority_actions["gap_severity"].map({"High": 0, "Moderate": 1, "Low": 2}).fillna(3)
+    priority_actions = priority_actions.sort_values(["risk_order", "user_id"]).drop(columns=["risk_order"]).head(8)
+
+if not priority_actions.empty:
+    st.markdown("#### Priority development actions")
+    st.markdown("<div class='priority-panel'>", unsafe_allow_html=True)
+    for _, row in priority_actions.iterrows():
+        badge = "<span class='risk-badge risk-high'>High</span>" if str(row["gap_severity"]).strip() == "High" else "<span class='risk-badge risk-moderate'>Moderate</span>"
+        st.markdown(
+            f"<div style='display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:8px;'><div><strong>{row['user_id']}</strong> · {row['skill']}</div>{badge}</div>"
+            f"<div style='margin-bottom:10px; color:#2f2b40;'>Course: {row['recommended_course_id']}</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
 if st.button("Generate AI Summary", type="primary"):
-    gap_counts = (
-        gaps["skill"].value_counts().head(5).to_dict()
-        if "skill" in gaps.columns
-        else {}
+    summary_payload = build_dashboard_summary_payload(
+        results=results,
+        gaps=gaps,
+        calibrated_count=calibrated_count,
+        average_score=average_score,
+        pass_count=pass_count,
+        fail_count=fail_count,
+        high_gap_count=high_gap_count,
     )
-    course_values = (
-        gaps["recommended_course_id"].dropna().astype(str).replace("", pd.NA).dropna().unique().tolist()
-        if "recommended_course_id" in gaps.columns
-        else []
-    )
-    summary_payload = {
-        "assessment_count": len(results),
-        "scored_count": int((results.get("result_status", pd.Series(dtype=str)) == "Scored").sum()),
-        "calibrated_count": calibrated_count,
-        "average_score_pct": average_score,
-        "pass_count": pass_count,
-        "fail_count": fail_count,
-        "critical_fail_count": int((results.get("critical_fail_flag", pd.Series(dtype=str)) == "Yes").sum()),
-        "gap_counts_by_skill": gap_counts,
-        "high_gap_count": high_gap_count,
-        "recommended_courses": course_values[:10],
-    }
     try:
         with st.spinner("Analyzing the portfolio..."):
+            summary_text = summarize_dashboard(summary_payload)
+            summary_html = format_dashboard_summary_html(summary_text)
             st.markdown(
-                f"<div class='ai-result'>{summarize_dashboard(summary_payload)}</div>",
+                f"<div class='ai-result'>{summary_html}</div>",
                 unsafe_allow_html=True,
             )
     except Exception as error:

@@ -2,6 +2,7 @@ import unittest
 
 import pandas as pd
 
+from ai import build_dashboard_summary_payload
 from utils import answer_to_option, normalize_difficulty
 from workflow import (
     finalize_manager_review,
@@ -18,6 +19,30 @@ from workflow import (
 
 
 class WorkflowGateTests(unittest.TestCase):
+    def test_dashboard_summary_payload_includes_employee_course_mapping(self):
+        results = pd.DataFrame([
+            {"user_id": "U-101", "result_status": "Scored", "score_pct": 80, "pass_fail_formula": "Pass", "critical_fail_flag": "No"},
+            {"user_id": "U-102", "result_status": "Calibrated", "score_pct": 72, "pass_fail_formula": "Fail", "critical_fail_flag": "Yes"},
+        ])
+        gaps = pd.DataFrame([
+            {"user_id": "U-101", "skill": "Leadership", "recommended_course_id": "TRN-001", "gap_severity": "High"},
+            {"user_id": "U-102", "skill": "Risk", "recommended_course_id": "TRN-002", "gap_severity": "Moderate"},
+        ])
+
+        payload = build_dashboard_summary_payload(
+            results=results,
+            gaps=gaps,
+            calibrated_count=1,
+            average_score=76,
+            pass_count=1,
+            fail_count=1,
+            high_gap_count=1,
+        )
+
+        self.assertIn("U-101", [item["user_id"] for item in payload["training_recommendations"]])
+        self.assertIn("TRN-001", [item["recommended_course_id"] for item in payload["training_recommendations"]])
+        self.assertEqual(payload["recommended_courses"], ["TRN-001", "TRN-002"])
+
     def test_sme_question_text_edit_is_trimmed(self):
         self.assertEqual(review_question_text("Original", "  Revised wording  "), "Revised wording")
 
