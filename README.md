@@ -15,23 +15,25 @@ The canonical source is the project root: `app.py`, `pages/`, and the shared Pyt
 
 ```mermaid
 flowchart LR
-    A[Employee Request] --> B[Manager Assignment]
+    A[Employee Request] --> B[Question Supply]
     B --> C[Reviewer Approval]
-    C --> D[Employee Assessment]
-    D --> E[Manager Review]
-    E --> F[Dashboard + Skill Gap Insights]
-    G[Admin Question Bank] --> C
-    H[AI Question Generation] --> G
+    C --> D[Manager Assignment]
+    D --> E[Employee Assessment]
+    E --> F[Manager Review]
+    F --> G[Dashboard + AI Brief]
+    F -->|Failed: reassessment| E
+    H[AI Question Generation] --> B
 ```
 
 ### Core capabilities
 
-- Guided assessment lifecycle from employee request to skill calibration
+- Guided assessment lifecycle from employee request to skill calibration and reassessment
 - Role-based blueprint and question selection
 - Human-in-the-loop SME review before assignment
 - AI-generated assessment questions with governance controls
 - Scored evaluation with critical-failure logic
 - Training and skill-gap recommendations surfaced in a dashboard
+- Optional AI portfolio summary based on aggregated outcomes and gap signals
 
 ## Architecture
 
@@ -68,8 +70,10 @@ flowchart TD
 - **AI generation:** `ai.py` calls OpenAI and expects JSON multiple-choice questions
 - **Validation:** `utils.py` parses and validates generated questions
 
-The input workbook must include the reference tabs used by the app, including:
-`Users_Teams`, `Role_Master`, `Role_Skill_Map`, `Proficiency_Levels`, `Assessment_Blueprints`, `Assessment_Schedules`, `Assessment_QBank`, `Assessment_Results`, `User_Skill_Assessments`, `Skill_Gaps_TNI`, and `Training_Skill_Map`.
+The input workbook must include the reference tabs used by the app:
+`Users_Teams`, `Role_Master`, `Role_Skill_Map`, `Proficiency_Levels`, `Assessment_Blueprints`, `Assessment_Schedules`, `Assessment_QBank`, and `Training_Skill_Map`.
+
+The output workbook is created from the input workbook on first write and stores application decisions and evidence, including `Assessment_Requests`, `Assessment_Assignments`, `Assessment_Assignment_Questions`, `Assessment_Responses`, `Assessment_Results`, `SME_Review_Workflow`, `User_Skill_Assessments`, `Skill_Gaps_TNI`, and `App_Audit_Log`.
 
 ## End-to-end workflow
 
@@ -86,8 +90,8 @@ Page: `pages/1_Employee_Request.py`
 Page: `pages/2_Manager_Assignment.py`
 
 - Select a blueprint for the employee's role
-- Find approved questions for the blueprint and skill, falling back to approved questions from the blueprint when necessary
-- Select five questions and create `Assessment_Assignments` and `Assessment_Assignment_Questions` rows
+- Find approved questions for the selected blueprint and requested skill
+- Select five schedule-ready questions with Easy, Medium, and Hard coverage and create `Assessment_Assignments` and `Assessment_Assignment_Questions` rows
 - Change request status to `Assigned`
 - Use the first available schedule, preferring `Ready to Schedule`
 
@@ -96,6 +100,7 @@ Page: `pages/2_Manager_Assignment.py`
 Page: `pages/3_Reviewer_Approval.py`
 
 - Review pending questions individually
+- Edit question wording before applying the SME decision; the edited wording is saved as the effective question text
 - Record approval in `SME_Review_Workflow` with reviewer role, decision, review date, and completion status
 - Only questions with effective status `Approved` and `approved_for_schedule == Yes` are assignable
 
@@ -113,9 +118,11 @@ Page: `pages/4_Employee_Assessment.py`
 
 Page: `pages/5_Manager_Review.py`
 
-- Review scored results and choose a calibrated proficiency level
-- Change result status to `Calibrated`
+- Review scored results and propose a calibrated proficiency level
+- Validate evidence and record SME signoff before changing result status to `Calibrated`
+- Bound the final calibration to one level above or below the objective recommendation
 - Write `User_Skill_Assessments` and `Skill_Gaps_TNI` using the role target level and `Training_Skill_Map`
+- Send failed assessments back for reassessment, limited to two attempts with a refreshed due date
 
 ### 6) Admin Question Bank
 
@@ -124,6 +131,7 @@ Page: `pages/6_Admin_Question_Bank.py`
 - Generate ten questions for a role, blueprint, skill, and target level
 - Save each generated question to `Assessment_QBank` as `Pending SME Review` with `approved_for_schedule == No`
 - Require reviewer approval before assignment is possible
+- Show valid approved coverage and difficulty mix for each blueprint and skill
 
 ### 7) Talent Dashboard
 
@@ -131,14 +139,21 @@ Page: `pages/7_Dashboard.py`
 
 - Combine reference and application-created results, skill assessments, and gaps
 - Show assessment counts, scored or calibrated results, skill levels, high gaps, and training recommendations
+- Generate an optional AI portfolio summary from aggregated scores, outcomes, skill gaps, and course signals
 
 ## Decision and scoring rules
 
 - `score_pct` = percentage of assigned questions answered correctly
 - Pass threshold = `75%`
 - A question with `critical_flag == Yes` answered incorrectly sets `critical_fail_flag` to `Yes` and fails the assessment regardless of percentage
-- Recommendation logic: `min(5, int(score_pct // 20))`
-- Managers can calibrate recommended levels before downstream skill-gap records are created
+- Recommendation logic uses workbook proficiency bands: `0`, `1`, `2`, `3`, `4`, and `5`
+- A critical failure forces `Fail` and lowers a high recommendation before calibration
+- Approved critical questions are schedulable; under the active `auto_fail` policy, an incorrect critical answer fails the assessment
+- Manager calibration requires validated evidence and SME signoff, and is limited to one level above or below the objective recommendation
+- Failed assessments can be sent back by the manager for reassessment; the original result remains preserved for audit
+- Reassessment is limited to two manager-approved attempts and refreshes the assignment due date by 30 days
+- A five-question assignment must include at least one Easy, one Medium, and one Hard question
+- Ten-question AI banks request a 3 Easy / 4 Medium / 3 Hard distribution; SME approval status controls whether the mix is assignment-ready
 
 ## Output workbook tabs
 

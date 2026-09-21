@@ -87,3 +87,44 @@ def validate_question(q):
     if q.get("answer") is None:
         raise ValueError("Missing answer")
     return True
+
+
+def answer_to_option(answer, options):
+    """Convert a generated answer into the workbook's A-D option format."""
+    if len(options) != 4:
+        raise ValueError("Must have exactly 4 options")
+
+    answer_text = str(answer).strip()
+    normalized = answer_text.upper().rstrip(".")
+    labels = {"A": 0, "B": 1, "C": 2, "D": 3}
+    if normalized in labels:
+        return normalized
+
+    if normalized.startswith("OPTION ") and normalized[-1:] in labels:
+        return normalized[-1]
+
+    option_values = [str(option).strip() for option in options]
+    if answer_text in option_values:
+        return "ABCD"[option_values.index(answer_text)]
+
+    raise ValueError(
+        f"Answer {answer_text!r} must be A-D or match one of the four options"
+    )
+
+
+def normalize_difficulty(value, index=None, total=None):
+    """Return a valid Easy/Medium/Hard label without confusing target level with difficulty."""
+    normalized = str(value).strip().lower() if value is not None else ""
+    if normalized in {"easy", "medium", "hard"}:
+        return normalized.title()
+
+    if index is not None and total:
+        easy_end = max(1, round(total * 0.3))
+        medium_end = easy_end + max(1, round(total * 0.4))
+        if index < easy_end:
+            return "Easy"
+        if index < medium_end:
+            return "Medium"
+        return "Hard"
+
+    return "Unclassified"

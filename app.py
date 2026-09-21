@@ -101,17 +101,17 @@ with col2:
 st.markdown("---")
 
 st.markdown("## Workflow journey")
-st.markdown("Move one request through a governed assessment, then turn the result into a practical development signal.")
+st.markdown("Move one request through governed question supply, assessment, calibration, reassessment, and development action.")
 
 steps = [
   ("01", "Employee Request", "Choose a person, mapped skill, and target level.", "var(--mint)", "◎"),
-  ("02", "Manager Assignment", "Select a blueprint, schedule, and five questions.", "var(--blue)", "→"),
-  ("03", "Reviewer Approval", "Approve questions before they reach an employee.", "var(--yellow)", "✓"),
-  ("04", "Employee Assessment", "Capture responses and calculate the score.", "var(--coral-soft)", "▣"),
-  ("05", "Manager Review", "Calibrate the result and create gap actions.", "var(--mint)", "◈"),
-  ("06", "Question Bank", "Generate draft questions for SME review.", "var(--blue)", "✦"),
-  ("07", "Talent Dashboard", "Read outcomes, skill levels, and training needs.", "var(--yellow)", "▤"),
-  ("08", "Architecture", "See how the pages, workbooks, and governance connect.", "var(--coral-soft)", "⌘"),
+  ("02", "Question Supply", "Generate role-specific questions with a balanced difficulty mix.", "var(--blue)", "✦"),
+  ("03", "Reviewer Approval", "Approve, reject, rewrite, or regenerate questions.", "var(--yellow)", "✓"),
+  ("04", "Manager Assignment", "Select five approved questions with Easy, Medium, and Hard coverage.", "var(--blue)", "→"),
+  ("05", "Employee Assessment", "Capture responses, score outcomes, and apply critical-question policy.", "var(--coral-soft)", "▣"),
+  ("06", "Manager Review", "Validate evidence, sign off, calibrate, or send a failed result back.", "var(--mint)", "◈"),
+  ("07", "Talent Dashboard", "Read portfolio signals, gaps, training actions, and the AI brief.", "var(--yellow)", "▤"),
+  ("08", "Architecture + Data Map", "Trace governance decisions from workbook input to audit output.", "var(--coral-soft)", "⌘"),
 ]
 for index in range(0, len(steps), 2):
   columns = st.columns(2)

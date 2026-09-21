@@ -1,7 +1,18 @@
+## PowerShell - run from the project folder
 python -m venv .venv
 
-.\.venv\Scripts\Activate.ps1
+# Install dependencies into the project virtual environment.
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-pip install -r requirements.txt
+# For AI question generation, create a .env file in this folder and add:
+# OPENAI_API_KEY=your-api-key
+# Optional: OPENAI_MODEL=gpt-4
 
-streamlit run app.py
+# Launch Streamlit through the same interpreter that owns the dependencies.
+.\.venv\Scripts\python.exe -m streamlit run app.py
+
+## Optional: activate the environment first
+# .\.venv\Scripts\Activate.ps1
+python -m streamlit run app.py
+
+.\.venv\Scripts\python.exe -m streamlit run app.py

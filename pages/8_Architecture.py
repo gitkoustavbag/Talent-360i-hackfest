@@ -16,15 +16,17 @@ st.markdown(
 )
 
 st.markdown("### The journey")
-st.markdown("Each step adds one layer of governance before the result reaches the dashboard.")
+st.markdown("Each step adds a control, decision, or evidence record before the result reaches development action.")
 
 journey = [
-    ("01", "Request", "An employee and a role-mapped skill are selected.", "#d9f4e8", "◎"),
-    ("02", "Assign", "A manager chooses a blueprint, schedule, and five questions.", "#dceeff", "→"),
-    ("03", "Review", "An SME approves questions before they can be scheduled.", "#fff2bd", "✓"),
-    ("04", "Assess", "The employee answers the assigned questions.", "#fff0eb", "▣"),
-    ("05", "Calibrate", "The manager reviews the score and calibrates the level.", "#d9f4e8", "◈"),
-    ("06", "Act", "Skill gaps and training recommendations are recorded.", "#dceeff", "✦"),
+    ("01", "Request", "An employee, role-mapped skill, and target level are selected; duplicate open requests are collapsed.", "#d9f4e8", "◎"),
+    ("02", "Generate", "AI creates a role and skill-specific draft bank with Easy, Medium, and Hard coverage.", "#dceeff", "✦"),
+    ("03", "Approve", "SME decisions control eligibility; rejected questions are terminal and do not return to the queue.", "#fff2bd", "✓"),
+    ("04", "Assign", "A manager selects five schedule-ready questions, including the minimum difficulty mix.", "#dceeff", "→"),
+    ("05", "Assess", "The employee answers the assignment; critical-question failures trigger auto-fail.", "#fff0eb", "▣"),
+    ("06", "Review", "The manager validates evidence and SME signoff, calibrates within one level, or sends a failure back.", "#d9f4e8", "◈"),
+    ("07", "Act", "TNI gaps, mapped courses, adjacent skills, and reassessment actions are recorded.", "#dceeff", "✦"),
+    ("08", "Interpret", "The dashboard turns outcomes into portfolio signals and an optional aggregated AI brief.", "#fff2bd", "▤"),
 ]
 
 for index in range(0, len(journey), 3):
@@ -47,9 +49,9 @@ st.markdown("### How the pieces connect")
 st.markdown("The application keeps reference data separate from the records created during the workflow.")
 
 layers = [
-    ("Reference workbook", "Users, roles, skills, levels, blueprints, schedules, question bank, and training map.", "#eef8f2"),
-    ("Streamlit workflow", "Request, assignment, SME approval, assessment, manager calibration, and dashboard pages.", "#eef5ff"),
-    ("Output workbook", "Requests, assignments, responses, results, reviews, skill assessments, gaps, and audit events.", "#fff7dc"),
+    ("Reference workbook", "Users, roles, skills, levels, blueprints, schedules, seeded questions, and training map.", "#eef8f2"),
+    ("Governed workflow", "Request deduplication, AI question generation, SME decisions, difficulty mix, assessment, review, and reassessment.", "#eef5ff"),
+    ("Output workbook", "Requests, assignments, responses, results, reviews, final levels, skill assessments, gaps, notes, and audit events.", "#fff7dc"),
 ]
 
 for index, (title, description, color) in enumerate(layers):
@@ -71,7 +73,7 @@ with left:
         """
         <div class="card governance-card">
             <strong>Before assessment</strong><br>
-            Questions are generated as drafts, reviewed by an SME, and marked eligible before assignment.
+            Questions are generated as drafts, checked for structure and difficulty mix, reviewed by an SME, and marked eligible before assignment. Rejected questions remain terminal.
         </div>
         """,
         unsafe_allow_html=True,
@@ -81,7 +83,7 @@ with right:
         """
         <div class="card governance-card">
             <strong>After assessment</strong><br>
-            Scores are checked for pass threshold and critical failures, then calibrated into skill-gap actions.
+            Scores are checked for pass threshold and critical failures. Managers need evidence and SME signoff before calibration; failed results can be sent back within the reassessment limit.
         </div>
         """,
         unsafe_allow_html=True,

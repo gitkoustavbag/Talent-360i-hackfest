@@ -3,7 +3,12 @@ import streamlit as st
 from db import append_output_row, load_input_sheet, load_optional_output_sheet
 from datetime import datetime
 from theme import apply_theme, audience_banner
-from workflow import effective_question_bank
+from workflow import (
+    deduplicate_open_requests,
+    effective_question_bank,
+    evaluate_question_mix,
+    get_approved_questions_for_assignment,
+)
 
 apply_theme("manager")
 
@@ -16,6 +21,14 @@ st.markdown("""
 audience_banner("manager", "Turn a request into a ready assessment", "Select the right blueprint, schedule, and approved questions.", "→")
 
 requests = load_optional_output_sheet("Assessment_Requests")
+original_request_statuses = requests["status"].copy() if "status" in requests else None
+requests = deduplicate_open_requests(requests)
+if (
+    original_request_statuses is not None and
+    not requests["status"].equals(original_request_statuses)
+):
+    from db import save_output_sheet
+    save_output_sheet("Assessment_Requests", requests)
 pending = requests[requests["status"] == "Requested"] if "status" in requests else requests
 
 if pending.empty:
@@ -41,27 +54,28 @@ else:
                 matching_blueprints["blueprint_id"] == value, "assessment_name"
             ].iloc[0],
         )
-        blueprint = matching_blueprints[matching_blueprints["blueprint_id"] == blueprint_id].iloc[0]
         matching_schedules = schedules[schedules["blueprint_id"] == blueprint_id]
-        skill_approved = question_bank[
-            (question_bank["blueprint_id"] == blueprint_id) &
-            (question_bank["skill_id"] == row["skill_id"]) &
-            (question_bank["sme_review_status"] == "Approved") &
-            (question_bank["approved_for_schedule"] == "Yes")
-        ]
+        skill_approved = get_approved_questions_for_assignment(
+            question_bank,
+            blueprint_id,
+            row["role_id"],
+            row.get("skill_id"),
+        )
         approved = skill_approved
-        if len(approved) < 5:
-            approved = question_bank[
-                (question_bank["blueprint_id"] == blueprint_id) &
-                (question_bank["sme_review_status"] == "Approved") &
-                (question_bank["approved_for_schedule"] == "Yes")
-            ]
-        target_count = min(5, len(approved))
 
+        target_count = 5
         if matching_schedules.empty:
             st.warning("No schedule exists for this blueprint.")
-        elif target_count < 5:
-            st.warning(f"Only {len(approved)} approved questions are available. Approve at least 5 questions first.")
+        elif len(approved) < target_count:
+            st.warning(
+                f"Only {len(approved)} approved questions are available for "
+                f"{row['skill']} in this blueprint. Approve at least 5 questions "
+                "for this exact role, blueprint, and skill before assignment."
+            )
+            st.page_link(
+                "pages/6_Admin_Question_Bank.py",
+                label="Open Admin Question Bank to generate missing questions",
+            )
         else:
             ready_schedules = matching_schedules[
                 matching_schedules["schedule_status"] == "Ready to Schedule"
@@ -75,12 +89,34 @@ else:
                 max_selections=target_count,
                 key=f"questions_{row['request_id']}",
                 format_func=lambda value: approved.loc[
-                    approved["question_id"] == value, "question_text"
-                ].iloc[0],
+                    approved["question_id"] == value
+                ].apply(
+                    lambda question: (
+                        f"[{str(question['difficulty']).strip().title()}] "
+                        f"{question['question_text']}"
+                    ),
+                    axis=1,
+                ).iloc[0],
             )
+            selected_questions = approved[approved["question_id"].isin(selected_ids)]
+            mix = evaluate_question_mix(selected_questions)
+            if selected_ids:
+                mix_counts = ", ".join(
+                    f"{difficulty.title()}: {count}"
+                    for difficulty, count in sorted(mix["counts"].items())
+                )
+                st.caption(f"Selected difficulty mix: {mix_counts or 'No difficulty labels'}")
+            if selected_ids and len(selected_ids) == target_count and mix["status"] != "Complete":
+                missing = ", ".join(
+                    f"{difficulty.title()} ({count})"
+                    for difficulty, count in mix["missing"].items()
+                )
+                st.warning(f"Question mix is incomplete. Add: {missing}.")
             if st.button("Assign Assessment", key=f"assign_{row['request_id']}"):
                 if len(selected_ids) != target_count:
                     st.error(f"Select exactly {target_count} questions.")
+                elif mix["status"] != "Complete":
+                    st.error("Select at least one Easy, one Medium, and one Hard question.")
                 else:
                     assignment_id = f"ASG-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
                     append_output_row(
