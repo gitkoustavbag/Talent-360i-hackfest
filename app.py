@@ -131,3 +131,7 @@ for index in range(0, len(steps), 2):
       )
 
 st.info("Begin with Employee Request in the left navigation.")
+st.warning(
+  "Prototype mode: seeded demo identities are used for this local walkthrough. "
+  "Production use requires authenticated role-based access, scoped data visibility, and transactional persistence."
+)

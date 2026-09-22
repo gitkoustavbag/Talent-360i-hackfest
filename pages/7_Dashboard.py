@@ -174,6 +174,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 audience_banner("analytics", "See where capability is moving", "Read outcomes, calibrated levels, and the gaps that need action.", "▤")
+st.info(
+    "Prototype privacy boundary: this local demo uses seeded records. "
+    "Production deployment must add authenticated access and manager/team scope filtering before showing detailed employee records."
+)
 
 input_results = load_input_sheet("Assessment_Results")
 output_results = load_optional_output_sheet("Assessment_Results")
@@ -322,7 +326,7 @@ st.markdown(
         """,
         unsafe_allow_html=True,
 )
-st.caption("Uses aggregated scores, outcomes, gaps, and course signals. No raw employee answers are sent.")
+st.caption("Uses aggregated scores, outcomes, gaps, and course signals. Employee IDs are excluded from the AI summary payload; raw answers are never sent.")
 
 priority_actions = pd.DataFrame()
 if not gaps.empty and {"user_id", "skill", "recommended_course_id", "gap_severity"}.issubset(gaps.columns):

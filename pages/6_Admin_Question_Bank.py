@@ -295,6 +295,11 @@ if st.button("Generate Question Bank"):
         skill_name = role_skill_rows.loc[role_skill_rows["skill_id"] == skill_id, "skill"].iloc[0]
         raw = generate_questions(skill_name, str(target_level), count=10)
         questions = parse_questions(raw)
+        if len(questions) != 10:
+            raise ValueError("The question generator must return exactly 10 questions.")
+        question_ids = [str(question.get("id", "")).strip() for question in questions]
+        if len(set(question_ids)) != len(question_ids):
+            raise ValueError("The question generator returned duplicate question IDs.")
         for question in questions:
             validate_question(question)
         for index, question in enumerate(questions):

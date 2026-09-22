@@ -79,13 +79,28 @@ def parse_questions(data):
     raise ValueError("Unsupported question format")
 
 def validate_question(q):
-    """Validate a single question dict."""
-    if not q.get("id") or not q.get("question"):
+    """Validate a generated question before it enters the question bank."""
+    question_id = str(q.get("id", "")).strip()
+    question_text = str(q.get("question", "")).strip()
+    options = q.get("options")
+    answer = q.get("answer")
+    difficulty = str(q.get("difficulty", "")).strip().lower()
+
+    if not question_id or not question_text:
         raise ValueError("Missing id or question text")
-    if len(q.get("options", [])) != 4:
+    if len(question_id) > 120 or len(question_text) > 2000:
+        raise ValueError("Question id or text is too long")
+    if not isinstance(options, list) or len(options) != 4:
         raise ValueError("Must have exactly 4 options")
-    if q.get("answer") is None:
+    normalized_options = [str(option).strip() for option in options]
+    if any(not option or len(option) > 1000 for option in normalized_options):
+        raise ValueError("Each option must be non-empty and no longer than 1000 characters")
+    if len(set(option.casefold() for option in normalized_options)) != 4:
+        raise ValueError("Options must be unique")
+    if answer is None:
         raise ValueError("Missing answer")
+    if difficulty and difficulty not in {"easy", "medium", "hard"}:
+        raise ValueError("Difficulty must be Easy, Medium, or Hard")
     return True
 
 

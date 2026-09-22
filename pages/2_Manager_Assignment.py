@@ -147,4 +147,16 @@ else:
                     ] = "Assigned"
                     from db import save_output_sheet
                     save_output_sheet("Assessment_Requests", requests)
+                    append_output_row(
+                        "App_Audit_Log",
+                        {
+                            "event_id": f"AUD-{assignment_id[4:]}",
+                            "entity_type": "assessment_assignment",
+                            "entity_id": assignment_id,
+                            "action": "assigned",
+                            "actor": "Manager (prototype session)",
+                            "details": f"Request={row['request_id']}, Questions={len(selected_ids)}",
+                            "created_at": datetime.now().isoformat(timespec="seconds"),
+                        },
+                    )
                     st.success(f"Assessment {assignment_id} assigned successfully.")

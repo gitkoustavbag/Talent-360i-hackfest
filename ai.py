@@ -1,5 +1,6 @@
 import json
 import os
+from html import escape
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -152,12 +153,11 @@ def build_dashboard_summary_payload(results, gaps, calibrated_count, average_sco
             .tolist()
         )
 
-        relevant_columns = [col for col in ["user_id", "skill", "recommended_course_id", "gap_severity", "tni_recommendation"] if col in gaps.columns]
+        relevant_columns = [col for col in ["skill", "recommended_course_id", "gap_severity", "tni_recommendation"] if col in gaps.columns]
         if "recommended_course_id" in gaps.columns and relevant_columns:
             training_frame = gaps[relevant_columns].dropna(subset=["recommended_course_id"]).copy()
             training_recommendations = [
                 {
-                    "user_id": str(row.get("user_id", "Unknown")).strip() or "Unknown",
                     "skill": str(row.get("skill", "Unknown")).strip() or "Unknown",
                     "recommended_course_id": str(row.get("recommended_course_id", "")).strip(),
                     "gap_severity": str(row.get("gap_severity", "")).strip(),
@@ -224,26 +224,26 @@ def format_dashboard_summary_html(summary_text):
             if not in_list:
                 html.append("<ul class='ai-summary-list'>")
                 in_list = True
-            html.append(f"<li>{line[2:].strip()}</li>")
+            html.append(f"<li>{escape(line[2:].strip())}</li>")
             continue
 
         if line.startswith(tuple(f"{i}. " for i in range(1, 10))):
             if not in_list:
                 html.append("<ul class='ai-summary-list'>")
                 in_list = True
-            html.append(f"<li>{line.split('. ', 1)[1].strip()}</li>")
+            html.append(f"<li>{escape(line.split('. ', 1)[1].strip())}</li>")
             continue
 
         if ":" in line and len(line.split(":", 1)[0].strip()) <= 40:
             key, value = line.split(":", 1)
             close_list()
             html.append(
-                f"<div class='ai-summary-card'><div class='ai-summary-key'>{key.strip()}</div><div class='ai-summary-value'>{value.strip()}</div></div>"
+                f"<div class='ai-summary-card'><div class='ai-summary-key'>{escape(key.strip())}</div><div class='ai-summary-value'>{escape(value.strip())}</div></div>"
             )
             continue
 
         close_list()
-        html.append(f"<p>{line}</p>")
+        html.append(f"<p>{escape(line)}</p>")
 
     close_list()
     return "\n".join(html)
@@ -263,8 +263,8 @@ Course catalogue
 
 Formatting rules:
 - Use short, evidence-based bullets under each section.
-- In Recommended actions, create employee-level actions in the format:
-  Employee: <user_id> | Skill gap: <skill> | Course: <course_id> | Rationale: <short reason>
+        - In Recommended actions, create anonymized skill-level actions in the format:
+            Skill gap: <skill> | Course: <course_id> | Rationale: <short reason>
 - In Course catalogue, list the shared training courses as separate bullets with a short reason for relevance.
 - Keep the summary readable, concise, and grounded in the data only.
 - Mention when the sample is small or data is incomplete.

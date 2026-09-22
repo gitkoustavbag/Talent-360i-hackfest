@@ -109,4 +109,16 @@ else:
                 assignments["assignment_id"] == selected_assignment, "assignment_status"
             ] = "Completed"
             save_output_sheet("Assessment_Assignments", assignments)
+            append_output_row(
+                "App_Audit_Log",
+                {
+                    "event_id": f"AUD-{result_id}",
+                    "entity_type": "assessment_result",
+                    "entity_id": result_id,
+                    "action": "scored",
+                    "actor": selected_user,
+                    "details": f"Assignment={selected_assignment}, Score={score:.2f}, Outcome={outcome['pass_fail_formula']}",
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
             st.success(f"Assessment submitted. Score: {score:.2f}%")

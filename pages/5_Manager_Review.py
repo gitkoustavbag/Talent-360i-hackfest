@@ -117,6 +117,18 @@ else:
                 assignments.loc[assignment_index, "notes"] = transition["manager_note"]
                 assignments.loc[assignment_index, "due_date"] = transition["reassessment_due_date"]
                 save_output_sheet("Assessment_Assignments", assignments)
+                append_output_row(
+                    "App_Audit_Log",
+                    {
+                        "event_id": f"AUD-{result['result_id']}-REASSESS",
+                        "entity_type": "assessment_result",
+                        "entity_id": result["result_id"],
+                        "action": "sent_back_for_reassessment",
+                        "actor": "Manager (prototype session)",
+                        "details": transition["manager_note"],
+                        "created_at": datetime.now().isoformat(timespec="seconds"),
+                    },
+                )
                 st.success(
                     f"Assessment sent back to {result['user_id']} for reassessment."
                 )
@@ -183,6 +195,18 @@ else:
                     "recommended_course_id": tni["course_id"],
                     "tni_recommendation": tni["recommendation"],
                     "cross_functional_recommendation": tni["cross_functional_recommendation"],
+                },
+            )
+            append_output_row(
+                "App_Audit_Log",
+                {
+                    "event_id": f"AUD-{result['result_id']}-CALIBRATED",
+                    "entity_type": "assessment_result",
+                    "entity_id": result["result_id"],
+                    "action": "calibrated",
+                    "actor": "Manager (prototype session)",
+                    "details": f"Final level={review['final_level']}, Evidence=Yes, SME signoff=Yes",
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
                 },
             )
             st.success(f"Calibration saved for {result['result_id']}.")

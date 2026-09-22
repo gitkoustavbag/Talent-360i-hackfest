@@ -90,6 +90,9 @@ else:
         if not selected_ids:
             st.warning("Select at least one question first.")
             st.stop()
+        if not reviewer_role.strip():
+            st.error("Enter the reviewer role before applying SME decisions.")
+            st.stop()
         decisions_applied = 0
         for question_id in selected_ids:
             question = pending[pending["question_id"] == question_id].iloc[0]
@@ -132,6 +135,18 @@ else:
                     "review_date_synthetic": datetime.now().date().isoformat(),
                     "human_in_loop_gate": "Completed",
                     "approved_for_schedule": approved_for_schedule,
+                },
+            )
+            append_output_row(
+                "App_Audit_Log",
+                {
+                    "event_id": f"AUD-{question_id}-{datetime.now().strftime('%f')}",
+                    "entity_type": "question_review",
+                    "entity_id": question_id,
+                    "action": choice.lower(),
+                    "actor": reviewer_role.strip(),
+                    "details": comment,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
                 },
             )
             decisions_applied += 1

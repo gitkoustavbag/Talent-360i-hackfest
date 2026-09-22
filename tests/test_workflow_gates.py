@@ -2,8 +2,8 @@ import unittest
 
 import pandas as pd
 
-from ai import build_dashboard_summary_payload
-from utils import answer_to_option, normalize_difficulty
+from ai import build_dashboard_summary_payload, format_dashboard_summary_html
+from utils import answer_to_option, normalize_difficulty, validate_question
 from workflow import (
     finalize_manager_review,
     deduplicate_open_requests,
@@ -19,6 +19,45 @@ from workflow import (
 
 
 class WorkflowGateTests(unittest.TestCase):
+    def test_dashboard_ai_payload_excludes_employee_ids(self):
+        payload = build_dashboard_summary_payload(
+            results=pd.DataFrame(),
+            gaps=pd.DataFrame([
+                {"user_id": "U-101", "skill": "Leadership", "recommended_course_id": "TRN-001"}
+            ]),
+            calibrated_count=0,
+            average_score=0,
+            pass_count=0,
+            fail_count=0,
+            high_gap_count=0,
+        )
+        self.assertNotIn("user_id", payload["training_recommendations"][0])
+
+    def test_dashboard_ai_html_escapes_model_content(self):
+        html = format_dashboard_summary_html("Key signals\n- <script>alert(1)</script>")
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
+
+    def test_generated_question_validation_rejects_duplicate_options(self):
+        with self.assertRaises(ValueError):
+            validate_question({
+                "id": "Q-1",
+                "question": "Choose one",
+                "options": ["Same", "Same", "Other", "Another"],
+                "answer": "Same",
+                "difficulty": "Easy",
+            })
+
+    def test_generated_question_validation_rejects_unknown_difficulty(self):
+        with self.assertRaises(ValueError):
+            validate_question({
+                "id": "Q-1",
+                "question": "Choose one",
+                "options": ["A", "B", "C", "D"],
+                "answer": "A",
+                "difficulty": "Extreme",
+            })
+
     def test_dashboard_summary_payload_includes_employee_course_mapping(self):
         results = pd.DataFrame([
             {"user_id": "U-101", "result_status": "Scored", "score_pct": 80, "pass_fail_formula": "Pass", "critical_fail_flag": "No"},
@@ -39,7 +78,10 @@ class WorkflowGateTests(unittest.TestCase):
             high_gap_count=1,
         )
 
-        self.assertIn("U-101", [item["user_id"] for item in payload["training_recommendations"]])
+        self.assertEqual(
+            [item["skill"] for item in payload["training_recommendations"]],
+            ["Leadership", "Risk"],
+        )
         self.assertIn("TRN-001", [item["recommended_course_id"] for item in payload["training_recommendations"]])
         self.assertEqual(payload["recommended_courses"], ["TRN-001", "TRN-002"])
 
