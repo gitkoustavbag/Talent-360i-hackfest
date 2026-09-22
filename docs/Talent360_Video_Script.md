@@ -1,17 +1,5 @@
 # Talent 360 Video Script
 
-## Purpose
-
-A 6-8 minute walkthrough of Talent 360 for Hackfest 2026. The video should show a complete, working assessment journey and make the security, responsible-AI, human-approval, and audit controls visible.
-
-## Recording Setup
-
-- Start the app with `streamlit run app.py` and open `http://localhost:8501`.
-- Use a seeded employee, role, skill, and target proficiency level from the workbook.
-- Keep the browser at a readable zoom and record the full Streamlit page plus sidebar.
-- Do not show `.env`, API keys, personal data outside the seeded demo data, or the raw workbook unless the screen is on the Data Map page.
-- Begin with a clean state. If a previous run already contains the records you need, use those records consistently rather than creating duplicates.
-- Prepare one approved five-question assignment with Easy, Medium, and Hard coverage. If needed, use the Admin Question Bank and Reviewer Approval steps below.
 
 ## Story in One Sentence
 
@@ -126,7 +114,7 @@ The sidebar order is the workflow order. The app may display `6. Admin Question 
 
 **Security and governance point:**
 
-> This gate addresses unsafe or unsuitable generated content before it reaches an employee. It also prevents the system from treating AI confidence as a substitute for expert approval.
+> This gate addresses unsafe or unsuitable generated content before it reaches an employee.
 
 **Transition:**
 
@@ -273,6 +261,8 @@ The sidebar order is the workflow order. The app may display `6. Admin Question 
 **Screen:** Return to Dashboard or Home page.
 
 **Narration:**
+
+> The current demo uses a local workbook persistence layer and seeded data; production deployment would add authenticated role-based access, transactional persistence, privacy controls, and hardened model-output handling.
 
 > Talent 360 connects capability measurement to action without removing people from the decision. It combines role-mapped data, validated question supply, SME approval, policy-based scoring, manager calibration, and mapped development recommendations.
 >
